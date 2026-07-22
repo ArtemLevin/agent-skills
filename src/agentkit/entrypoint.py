@@ -7,6 +7,7 @@ from . import cli as core_cli
 from .config import configured_project_root
 from .evals.cli import efficiency_main, eval_main, quality_history_main
 from .evals.resources import ensure_evaluation_files
+from .graphify import install_graphify_project_skill
 from .installation import apply_migration, installation_manifest, record_installation_manifest
 from .model_runtime import ModelRoutingRunner
 from .model_runtime.cli import models_main, providers_main
@@ -58,7 +59,7 @@ def _subcommand_argv(argv: list[str], command_index: int) -> list[str]:
     return result
 
 
-def _quality_command(argv: list[str]) -> str:
+def _domain_command(argv: list[str]) -> str:
     index = 0
     while index < len(argv):
         value = argv[index]
@@ -70,6 +71,15 @@ def _quality_command(argv: list[str]) -> str:
             continue
         return value
     return ""
+
+
+def _option_value(argv: list[str], name: str, default: str) -> str:
+    for index, value in enumerate(argv):
+        if value == name and index + 1 < len(argv):
+            return argv[index + 1]
+        if value.startswith(f"{name}="):
+            return value.split("=", 1)[1]
+    return default
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
             return providers_main(_subcommand_argv(args, position))
         if command == "quality":
             quality_args = _subcommand_argv(args, position)
-            quality_command = _quality_command(quality_args)
+            quality_command = _domain_command(quality_args)
             if quality_command in _EVALUATION_QUALITY_COMMANDS:
                 return quality_history_main(quality_args)
             if quality_command in ROUTING_COMMANDS:
@@ -97,6 +107,20 @@ def main(argv: list[str] | None = None) -> int:
             return quality_main(quality_args)
         if command == "hotspot-context":
             return hotspot_context_main(_subcommand_argv(args, position))
+        if command == "graph":
+            graph_args = _subcommand_argv(args, position)
+            if _domain_command(graph_args) == "install":
+                if "--help" in graph_args or "-h" in graph_args:
+                    print("usage: agentkit graph install [--platform PLATFORM]")
+                    return 0
+                root = configured_project_root(_project_root_arg(args))
+                payload = install_graphify_project_skill(
+                    root,
+                    platform=_option_value(graph_args, "--platform", "agents"),
+                    required=True,
+                )
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
         core_cli.AgentKitRunner = ModelRoutingRunner
         root = configured_project_root(_project_root_arg(args))
         existing_agent_dir = command == "init" and (root / ".agent").is_dir()
