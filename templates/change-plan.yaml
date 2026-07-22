@@ -1,0 +1,15 @@
+steps:
+  - id: 1
+    target: path/to/file.py:Owner.method
+    action: Describe the behavioral change.
+    reason: Explain why this layer owns the invariant.
+    verification: Name the exact test or command.
+    depends_on: []
+
+constraints:
+  - Do not change an unrelated public contract.
+
+rollback_or_recovery:
+  - Describe a safe revert or forward-recovery path.
+
+open_questions: []
