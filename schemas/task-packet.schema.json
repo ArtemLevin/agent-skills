@@ -21,13 +21,20 @@
       },
       "additionalProperties": false
     },
+    "quality": {"type": "object"},
+    "quality_route": {"type": "object"},
+    "verification_plan": {"type": "object"},
     "git_head": {"type": "string"},
     "limits": {
       "type": "object",
       "required": ["max_changed_files", "max_fix_iterations"],
       "properties": {
         "max_changed_files": {"type": "integer", "minimum": 1},
-        "max_fix_iterations": {"type": "integer", "minimum": 0}
+        "max_fix_iterations": {"type": "integer", "minimum": 0},
+        "hard_input_tokens": {"type": "integer", "minimum": 0},
+        "hard_output_tokens": {"type": "integer", "minimum": 0},
+        "hard_agent_calls": {"type": "integer", "minimum": 0},
+        "hard_duration_seconds": {"type": "integer", "minimum": 0}
       },
       "additionalProperties": false
     }

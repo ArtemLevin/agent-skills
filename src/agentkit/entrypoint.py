@@ -7,10 +7,12 @@ from . import cli as core_cli
 from .config import configured_project_root
 from .quality.cli import main as quality_main
 from .quality.hotspot_cli import main as hotspot_context_main
-from .quality.integration import QualityAwareRunner
 from .quality.resources import ensure_quality_project_files
 from .quality.resources_gate import ensure_quality_gate_project_files
 from .quality.resources_hotspot import ensure_hotspot_context_files
+from .quality.resources_routing import ensure_quality_routing_files
+from .quality.routing_cli import ROUTING_COMMANDS, main as quality_routing_main
+from .quality.routing_integration import RoutingAwareRunner
 
 
 def _command_position(argv: list[str]) -> int:
@@ -45,22 +47,40 @@ def _subcommand_argv(argv: list[str], command_index: int) -> list[str]:
     return result
 
 
+def _quality_command(argv: list[str]) -> str:
+    index = 0
+    while index < len(argv):
+        value = argv[index]
+        if value == "--project-root":
+            index += 2
+            continue
+        if value.startswith("--project-root="):
+            index += 1
+            continue
+        return value
+    return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     position = _command_position(args)
     command = args[position] if position < len(args) else ""
     try:
         if command == "quality":
-            return quality_main(_subcommand_argv(args, position))
+            quality_args = _subcommand_argv(args, position)
+            if _quality_command(quality_args) in ROUTING_COMMANDS:
+                return quality_routing_main(quality_args)
+            return quality_main(quality_args)
         if command == "hotspot-context":
             return hotspot_context_main(_subcommand_argv(args, position))
-        core_cli.AgentKitRunner = QualityAwareRunner
+        core_cli.AgentKitRunner = RoutingAwareRunner
         result = core_cli.main(args)
         if command == "init" and result == 0:
             root = configured_project_root(_project_root_arg(args))
             ensure_quality_project_files(root)
             ensure_quality_gate_project_files(root)
             ensure_hotspot_context_files(root)
+            ensure_quality_routing_files(root)
         return result
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)

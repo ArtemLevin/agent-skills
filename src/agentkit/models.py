@@ -152,6 +152,7 @@ class CompletionReport:
     quality_passed: bool = True
     quality_available: bool = False
     quality_regressions: list[str] = field(default_factory=list)
+    quality_route: dict[str, Any] = field(default_factory=dict)
 
     @property
     def ready(self) -> bool:
