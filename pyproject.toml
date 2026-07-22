@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-skills-engineering-kit"
-version = "0.2.0"
-description = "Graph-aware, risk-controlled supervised autopilot for software-engineering agents"
+version = "0.3.0"
+description = "Graph-aware supervised autopilot with token telemetry and enforceable budgets"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 readme = "README.md"

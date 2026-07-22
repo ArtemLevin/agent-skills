@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from .commands import CommandPolicy, run_command
 from .config import GraphifyConfig
 from .models import CommandResult
+
+
+CommandObserver = Callable[[str, CommandResult], None]
 
 
 @dataclass(frozen=True)
@@ -35,23 +39,28 @@ class GraphifyClient:
         policy: CommandPolicy,
         *,
         timeout_seconds: int = 900,
+        observer: CommandObserver | None = None,
     ) -> None:
         self.project_root = project_root
         self.config = config
         self.policy = policy
         self.timeout_seconds = timeout_seconds
+        self.observer = observer
 
     @property
     def installed(self) -> bool:
         return shutil.which("graphify") is not None
 
-    def _execute(self, command: list[str]) -> CommandResult:
-        return run_command(
+    def _execute(self, command: list[str], *, phase: str) -> CommandResult:
+        result = run_command(
             command,
             cwd=self.project_root,
             timeout_seconds=self.timeout_seconds,
             policy=self.policy,
         )
+        if self.observer is not None:
+            self.observer(phase, result)
+        return result
 
     def update(self) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
@@ -63,7 +72,7 @@ class GraphifyClient:
         if self.config.directed:
             command.append("--directed")
         command.append("--no-viz")
-        return self._execute(command)
+        return self._execute(command, phase="graph_update")
 
     def query(self, task: str) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
@@ -80,7 +89,7 @@ class GraphifyClient:
             "--budget",
             str(self.config.query_budget),
         ]
-        return self._execute(command)
+        return self._execute(command, phase="graph_query")
 
     def build_context(self, task: str) -> GraphContext:
         if not self.config.enabled:

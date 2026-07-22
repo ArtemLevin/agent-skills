@@ -20,6 +20,24 @@ require_review = true
 deep_requires_approval = true
 max_fix_iterations = 1
 
+[budget]
+enabled = true
+soft_input_tokens = 30000
+hard_input_tokens = 60000
+soft_output_tokens = 8000
+hard_output_tokens = 16000
+soft_agent_calls = 4
+hard_agent_calls = 7
+soft_duration_seconds = 1800
+hard_duration_seconds = 3600
+unknown_usage_policy = "warn"
+
+[budget.phase_agent_call_limits]
+plan = 1
+implementation = 1
+review = 2
+targeted_fix = 1
+
 [verification]
 commands = [
   ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
