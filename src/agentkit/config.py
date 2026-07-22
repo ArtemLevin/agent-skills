@@ -50,6 +50,18 @@ implementation = 1
 review = 2
 targeted_fix = 1
 
+[context]
+enabled = true
+cache_enabled = true
+cache_path = ".agent/cache/context.db"
+profile_path = ".agent/project-profile.json"
+max_profile_files = 5000
+max_candidate_files = 12
+max_symbols_per_file = 20
+max_context_chars = 16000
+cache_ttl_seconds = 604800
+stale_after_days = 30
+
 [verification]
 # Each command is an argv array. Empty means AgentKit performs conservative auto-discovery.
 commands = []
@@ -73,7 +85,9 @@ denied_substrings = [
 @dataclass(frozen=True)
 class AgentConfig:
     platform: str = "codex"
-    command: list[str] = field(default_factory=lambda: ["codex", "exec", "{prompt}"])
+    command: list[str] = field(
+        default_factory=lambda: ["codex", "exec", "{prompt}"]
+    )
     timeout_seconds: int = 1800
 
 
@@ -119,6 +133,20 @@ class BudgetConfig:
 
 
 @dataclass(frozen=True)
+class ContextConfig:
+    enabled: bool = True
+    cache_enabled: bool = True
+    cache_path: str = ".agent/cache/context.db"
+    profile_path: str = ".agent/project-profile.json"
+    max_profile_files: int = 5000
+    max_candidate_files: int = 12
+    max_symbols_per_file: int = 20
+    max_context_chars: int = 16000
+    cache_ttl_seconds: int = 604800
+    stale_after_days: int = 30
+
+
+@dataclass(frozen=True)
 class VerificationConfig:
     commands: list[list[str]] = field(default_factory=list)
     timeout_seconds: int = 900
@@ -141,6 +169,7 @@ class AgentKitConfig:
     graphify: GraphifyConfig
     workflow: WorkflowConfig
     budget: BudgetConfig
+    context: ContextConfig
     verification: VerificationConfig
     scope: ScopeConfig
     security: SecurityConfig
@@ -154,7 +183,9 @@ def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def _string_list(value: Any, *, field_name: str) -> list[str]:
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) for item in value
+    ):
         raise ValueError(f"{field_name} must be an array of strings")
     return list(value)
 
@@ -166,8 +197,14 @@ def _command_list(value: Any) -> list[list[str]]:
         raise ValueError("verification.commands must be an array")
     commands: list[list[str]] = []
     for index, command in enumerate(value):
-        if not isinstance(command, list) or not command or not all(isinstance(part, str) for part in command):
-            raise ValueError(f"verification.commands[{index}] must be a non-empty argv array")
+        if (
+            not isinstance(command, list)
+            or not command
+            or not all(isinstance(part, str) for part in command)
+        ):
+            raise ValueError(
+                f"verification.commands[{index}] must be a non-empty argv array"
+            )
         commands.append(list(command))
     return commands
 
@@ -187,6 +224,18 @@ def _positive_int_map(value: Any, *, field_name: str) -> dict[str, int]:
     return result
 
 
+def _non_negative_int(
+    value: Any,
+    *,
+    field_name: str,
+    default: int,
+) -> int:
+    parsed = int(default if value is None else value)
+    if parsed < 0:
+        raise ValueError(f"{field_name} must be zero or positive")
+    return parsed
+
+
 def load_config(project_root: Path) -> AgentKitConfig:
     config_path = project_root / ".agent" / "agentkit.toml"
     if not config_path.is_file():
@@ -198,13 +247,18 @@ def load_config(project_root: Path) -> AgentKitConfig:
     graphify = _section(data, "graphify")
     workflow = _section(data, "workflow")
     budget = _section(data, "budget")
+    context = _section(data, "context")
     verification = _section(data, "verification")
     scope = _section(data, "scope")
     security = _section(data, "security")
 
-    unknown_usage_policy = str(budget.get("unknown_usage_policy", "warn")).lower()
+    unknown_usage_policy = str(
+        budget.get("unknown_usage_policy", "warn")
+    ).lower()
     if unknown_usage_policy not in {"allow", "warn", "stop"}:
-        raise ValueError("budget.unknown_usage_policy must be allow, warn, or stop")
+        raise ValueError(
+            "budget.unknown_usage_policy must be allow, warn, or stop"
+        )
 
     return AgentKitConfig(
         agent=AgentConfig(
@@ -219,53 +273,135 @@ def load_config(project_root: Path) -> AgentKitConfig:
             enabled=bool(graphify.get("enabled", True)),
             required=bool(graphify.get("required", False)),
             directed=bool(graphify.get("directed", True)),
-            update_before_task=str(graphify.get("update_before_task", "changed")),
+            update_before_task=str(
+                graphify.get("update_before_task", "changed")
+            ),
             query_budget=int(graphify.get("query_budget", 1200)),
             max_initial_queries=int(graphify.get("max_initial_queries", 1)),
         ),
         workflow=WorkflowConfig(
             default_mode=str(workflow.get("default_mode", "auto")),
-            require_clean_tree=bool(workflow.get("require_clean_tree", True)),
+            require_clean_tree=bool(
+                workflow.get("require_clean_tree", True)
+            ),
             require_review=bool(workflow.get("require_review", True)),
-            deep_requires_approval=bool(workflow.get("deep_requires_approval", True)),
-            max_fix_iterations=int(workflow.get("max_fix_iterations", 1)),
+            deep_requires_approval=bool(
+                workflow.get("deep_requires_approval", True)
+            ),
+            max_fix_iterations=int(
+                workflow.get("max_fix_iterations", 1)
+            ),
         ),
         budget=BudgetConfig(
             enabled=bool(budget.get("enabled", True)),
-            soft_input_tokens=int(budget.get("soft_input_tokens", 30000)),
-            hard_input_tokens=int(budget.get("hard_input_tokens", 60000)),
-            soft_output_tokens=int(budget.get("soft_output_tokens", 8000)),
-            hard_output_tokens=int(budget.get("hard_output_tokens", 16000)),
-            soft_agent_calls=int(budget.get("soft_agent_calls", 4)),
-            hard_agent_calls=int(budget.get("hard_agent_calls", 7)),
-            soft_duration_seconds=int(budget.get("soft_duration_seconds", 1800)),
-            hard_duration_seconds=int(budget.get("hard_duration_seconds", 3600)),
+            soft_input_tokens=int(
+                budget.get("soft_input_tokens", 30000)
+            ),
+            hard_input_tokens=int(
+                budget.get("hard_input_tokens", 60000)
+            ),
+            soft_output_tokens=int(
+                budget.get("soft_output_tokens", 8000)
+            ),
+            hard_output_tokens=int(
+                budget.get("hard_output_tokens", 16000)
+            ),
+            soft_agent_calls=int(
+                budget.get("soft_agent_calls", 4)
+            ),
+            hard_agent_calls=int(
+                budget.get("hard_agent_calls", 7)
+            ),
+            soft_duration_seconds=int(
+                budget.get("soft_duration_seconds", 1800)
+            ),
+            hard_duration_seconds=int(
+                budget.get("hard_duration_seconds", 3600)
+            ),
             unknown_usage_policy=unknown_usage_policy,
             phase_agent_call_limits=_positive_int_map(
                 budget.get(
                     "phase_agent_call_limits",
-                    {"plan": 1, "implementation": 1, "review": 2, "targeted_fix": 1},
+                    {
+                        "plan": 1,
+                        "implementation": 1,
+                        "review": 2,
+                        "targeted_fix": 1,
+                    },
                 ),
                 field_name="budget.phase_agent_call_limits",
             ),
         ),
+        context=ContextConfig(
+            enabled=bool(context.get("enabled", True)),
+            cache_enabled=bool(context.get("cache_enabled", True)),
+            cache_path=str(
+                context.get("cache_path", ".agent/cache/context.db")
+            ),
+            profile_path=str(
+                context.get(
+                    "profile_path",
+                    ".agent/project-profile.json",
+                )
+            ),
+            max_profile_files=_non_negative_int(
+                context.get("max_profile_files"),
+                field_name="context.max_profile_files",
+                default=5000,
+            ),
+            max_candidate_files=_non_negative_int(
+                context.get("max_candidate_files"),
+                field_name="context.max_candidate_files",
+                default=12,
+            ),
+            max_symbols_per_file=_non_negative_int(
+                context.get("max_symbols_per_file"),
+                field_name="context.max_symbols_per_file",
+                default=20,
+            ),
+            max_context_chars=_non_negative_int(
+                context.get("max_context_chars"),
+                field_name="context.max_context_chars",
+                default=16000,
+            ),
+            cache_ttl_seconds=_non_negative_int(
+                context.get("cache_ttl_seconds"),
+                field_name="context.cache_ttl_seconds",
+                default=604800,
+            ),
+            stale_after_days=_non_negative_int(
+                context.get("stale_after_days"),
+                field_name="context.stale_after_days",
+                default=30,
+            ),
+        ),
         verification=VerificationConfig(
             commands=_command_list(verification.get("commands", [])),
-            timeout_seconds=int(verification.get("timeout_seconds", 900)),
+            timeout_seconds=int(
+                verification.get("timeout_seconds", 900)
+            ),
         ),
-        scope=ScopeConfig(max_changed_files=int(scope.get("max_changed_files", 20))),
+        scope=ScopeConfig(
+            max_changed_files=int(scope.get("max_changed_files", 20))
+        ),
         security=SecurityConfig(
             allowed_executables=_string_list(
-                security.get("allowed_executables", []), field_name="security.allowed_executables"
+                security.get("allowed_executables", []),
+                field_name="security.allowed_executables",
             ),
             denied_substrings=_string_list(
-                security.get("denied_substrings", []), field_name="security.denied_substrings"
+                security.get("denied_substrings", []),
+                field_name="security.denied_substrings",
             ),
         ),
     )
 
 
-def write_default_config(project_root: Path, *, force: bool = False) -> Path:
+def write_default_config(
+    project_root: Path,
+    *,
+    force: bool = False,
+) -> Path:
     config_path = project_root / ".agent" / "agentkit.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     if config_path.exists() and not force:

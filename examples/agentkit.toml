@@ -38,6 +38,18 @@ implementation = 1
 review = 2
 targeted_fix = 1
 
+[context]
+enabled = true
+cache_enabled = true
+cache_path = ".agent/cache/context.db"
+profile_path = ".agent/project-profile.json"
+max_profile_files = 5000
+max_candidate_files = 12
+max_symbols_per_file = 20
+max_context_chars = 16000
+cache_ttl_seconds = 604800
+stale_after_days = 30
+
 [verification]
 commands = [
   ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],

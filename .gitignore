@@ -2,11 +2,13 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .venv/
-venv/
 dist/
 build/
 *.egg-info/
 .DS_Store
 .agent/state/
+.agent/cache/
+.agent/project-profile.json
 graphify-out/

@@ -3,4 +3,4 @@
 from .models import RunMode
 
 __all__ = ["RunMode"]
-__version__ = "0.3.0"
+__version__ = "0.4.0"
