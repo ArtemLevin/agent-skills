@@ -97,6 +97,16 @@ high_fan_in = 10
 high_fan_out = 10
 high_centrality = 0.75
 
+[quality.ci]
+enabled = true
+workflow_path = ".github/workflows/agentkit-quality.yml"
+python_version = "3.11"
+base_branch = "main"
+package_spec = "agent-skills-engineering-kit[quality]"
+artifact_retention_days = 7
+cache_enabled = true
+annotations = false
+
 [verification]
 commands = [
   ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],

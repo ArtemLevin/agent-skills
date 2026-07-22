@@ -5,9 +5,11 @@ import sys
 
 from . import cli as core_cli
 from .config import configured_project_root
+from .quality.ci_cli import main as ci_main
 from .quality.cli import main as quality_main
 from .quality.hotspot_cli import main as hotspot_context_main
 from .quality.resources import ensure_quality_project_files
+from .quality.resources_ci import ensure_quality_ci_files
 from .quality.resources_gate import ensure_quality_gate_project_files
 from .quality.resources_hotspot import ensure_hotspot_context_files
 from .quality.resources_routing import ensure_quality_routing_files
@@ -66,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
     position = _command_position(args)
     command = args[position] if position < len(args) else ""
     try:
+        if command == "ci":
+            return ci_main(_subcommand_argv(args, position))
         if command == "quality":
             quality_args = _subcommand_argv(args, position)
             if _quality_command(quality_args) in ROUTING_COMMANDS:
@@ -81,9 +85,13 @@ def main(argv: list[str] | None = None) -> int:
             ensure_quality_gate_project_files(root)
             ensure_hotspot_context_files(root)
             ensure_quality_routing_files(root)
+            ensure_quality_ci_files(root)
         return result
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+        print(
+            json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2),
+            file=sys.stderr,
+        )
         return 2
 
 
