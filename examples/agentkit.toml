@@ -50,6 +50,24 @@ max_context_chars = 16000
 cache_ttl_seconds = 604800
 stale_after_days = 30
 
+[quality]
+enabled = true
+provider = "strictacode"
+required = false
+mode = "report"
+details_policy = "on_warning"
+cache_enabled = true
+cache_ttl_seconds = 86400
+timeout_seconds = 900
+command = ["strictacode"]
+max_packages = 5
+max_modules = 5
+max_classes = 10
+max_methods = 15
+max_functions = 15
+include = []
+exclude = ["vendor", "generated", ".venv", "node_modules"]
+
 [verification]
 commands = [
   ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
@@ -63,7 +81,7 @@ max_changed_files = 20
 [security]
 allowed_executables = [
   "git", "python", "python3", "uv", "pytest", "ruff", "mypy",
-  "npm", "pnpm", "yarn", "make", "codex", "claude", "gemini", "aider", "graphify"
+  "npm", "pnpm", "yarn", "make", "codex", "claude", "gemini", "aider", "graphify", "strictacode"
 ]
 denied_substrings = [
   "rm -rf /", "git push --force", "git reset --hard", "drop database", "truncate table"
