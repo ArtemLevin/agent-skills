@@ -1,0 +1,40 @@
+version = 1
+
+[agent]
+platform = "codex"
+command = ["codex", "exec", "{prompt}"]
+timeout_seconds = 1800
+
+[graphify]
+enabled = true
+required = false
+directed = true
+update_before_task = "changed"
+query_budget = 1200
+max_initial_queries = 1
+
+[workflow]
+default_mode = "auto"
+require_clean_tree = true
+require_review = true
+deep_requires_approval = true
+max_fix_iterations = 1
+
+[verification]
+commands = [
+  ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
+  ["python", "-m", "compileall", "-q", "src", "tests"]
+]
+timeout_seconds = 900
+
+[scope]
+max_changed_files = 20
+
+[security]
+allowed_executables = [
+  "git", "python", "python3", "uv", "pytest", "ruff", "mypy",
+  "npm", "pnpm", "yarn", "make", "codex", "claude", "gemini", "aider", "graphify"
+]
+denied_substrings = [
+  "rm -rf /", "git push --force", "git reset --hard", "drop database", "truncate table"
+]
