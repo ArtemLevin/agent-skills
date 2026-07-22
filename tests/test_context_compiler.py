@@ -21,7 +21,7 @@ class ContextCompilerTests(unittest.TestCase):
             )
 
             self.assertEqual(compiler.project_root, root.resolve())
-            self.assertEqual(compiler._candidate_files("worker"), [target])
+            self.assertEqual(compiler._candidate_files("worker"), [target.resolve()])
 
     def test_compiles_bounded_context_and_hits_cache(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
