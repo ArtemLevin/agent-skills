@@ -17,6 +17,7 @@ from agentkit.executables import ExecutableResolution, resolve_executable
 from agentkit.graphify import (
     GraphifyClient,
     ensure_graphify_ignore,
+    graphify_rebuild_marker,
     install_graphify_project_skill,
 )
 from agentkit.models import CommandResult
@@ -61,12 +62,12 @@ class GraphifyBootstrapTests(unittest.TestCase):
             package_version="0.9.23",
         )
 
-    def _result(self) -> CommandResult:
+    def _result(self, *, returncode: int = 0) -> CommandResult:
         return CommandResult(
             command=[],
-            returncode=0,
-            stdout="ok",
-            stderr="",
+            returncode=returncode,
+            stdout="ok" if returncode == 0 else "",
+            stderr="" if returncode == 0 else "failed",
             duration_seconds=0.1,
         )
 
@@ -152,6 +153,7 @@ class GraphifyBootstrapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             ensure_graphify_ignore(root)
+            graphify_rebuild_marker(root).unlink()
             graph = root / "graphify-out" / "graph.json"
             graph.parent.mkdir(parents=True)
             graph.write_text("{}", encoding="utf-8")
@@ -188,6 +190,29 @@ class GraphifyBootstrapTests(unittest.TestCase):
             ignore = (root / ".graphifyignore").read_text(encoding="utf-8")
             self.assertIn(".agent/", ignore)
             self.assertIn(".agents/", ignore)
+            self.assertFalse(graphify_rebuild_marker(root).exists())
+
+    def test_failed_full_rebuild_preserves_required_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ensure_graphify_ignore(root)
+            graph = root / "graphify-out" / "graph.json"
+            graph.parent.mkdir(parents=True)
+            graph.write_text("{}", encoding="utf-8")
+            executable = root / "graphify.exe"
+            policy = CommandPolicy(["graphify"], [])
+            with patch(
+                "agentkit.graphify.run_command",
+                return_value=self._result(returncode=1),
+            ) as run:
+                GraphifyClient(
+                    root,
+                    GraphifyConfig(),
+                    policy,
+                    resolution=self._resolution(executable),
+                ).update()
+            self.assertNotIn("--update", run.call_args.args[0])
+            self.assertTrue(graphify_rebuild_marker(root).is_file())
 
     def test_graphify_ignore_preserves_user_rules(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -200,6 +225,7 @@ class GraphifyBootstrapTests(unittest.TestCase):
             self.assertIn(".agent/", first)
             self.assertFalse(ensure_graphify_ignore(root))
             self.assertEqual(ignore.read_text(encoding="utf-8"), first)
+            self.assertTrue(graphify_rebuild_marker(root).is_file())
 
     def test_graph_query_uses_only_the_original_task_as_question(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
