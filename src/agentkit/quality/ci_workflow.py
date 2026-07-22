@@ -36,6 +36,43 @@ def render_quality_workflow(config: QualityCIConfig) -> str:
     package_spec = shlex.quote(config.package_spec)
     python_version = json.dumps(config.python_version)
     base_branch = shlex.quote(config.base_branch)
+    smoke_step = ""
+    smoke_summary = ""
+    smoke_artifact = ""
+    smoke_enforce = ""
+    smoke_env = ""
+    if config.eval_smoke_enabled:
+        eval_directory = shlex.quote(config.eval_manifest_directory)
+        smoke_env = "      AGENTKIT_EVAL_ID: eval-smoke-${{ github.run_id }}-${{ github.run_attempt }}\n"
+        smoke_step = f'''      - name: Run AgentKit evaluation smoke suite
+        id: eval_smoke
+        shell: bash
+        run: |
+          EVAL_EXIT=0
+          agentkit eval suite {eval_directory} \\
+            --smoke \\
+            --runs {config.eval_repetitions} \\
+            --evaluation-id "$AGENTKIT_EVAL_ID" || EVAL_EXIT=$?
+          mkdir -p ".agent/evals/$AGENTKIT_EVAL_ID"
+          echo "$EVAL_EXIT" > ".agent/evals/$AGENTKIT_EVAL_ID/eval-exit-code"
+
+'''
+        smoke_summary = '''          if [[ -f ".agent/evals/$AGENTKIT_EVAL_ID/summary.md" ]]; then
+            printf "\\n" >> "$GITHUB_STEP_SUMMARY"
+            cat ".agent/evals/$AGENTKIT_EVAL_ID/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+'''
+        smoke_artifact = "            .agent/evals/${{ env.AGENTKIT_EVAL_ID }}\n"
+        smoke_enforce = '''          EVAL_EXIT_FILE=".agent/evals/$AGENTKIT_EVAL_ID/eval-exit-code"
+          if [[ ! -f "$EVAL_EXIT_FILE" ]]; then
+            echo "AgentKit did not produce eval-exit-code" >&2
+            exit 2
+          fi
+          EVAL_EXIT="$(cat "$EVAL_EXIT_FILE")"
+          if [[ "$QUALITY_EXIT" -eq 0 && "$EVAL_EXIT" -ne 0 ]]; then
+            exit "$EVAL_EXIT"
+          fi
+'''
 
     return _workflow_header(config) + f'''name: AgentKit Quality
 
@@ -57,7 +94,7 @@ jobs:
     timeout-minutes: 30
     env:
       AGENTKIT_CI_RUN_ID: github-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
-
+{smoke_env}
     steps:
       - name: Checkout full history
         uses: actions/checkout@v4
@@ -89,21 +126,22 @@ jobs:
             --base-ref "$BASE_REF" \\
             --run-id "$AGENTKIT_CI_RUN_ID"
 
-      - name: Publish AgentKit job summary
+{smoke_step}      - name: Publish AgentKit job summary
         if: always()
         shell: bash
         run: |
           agentkit ci quality summary \\
             --run-id "$AGENTKIT_CI_RUN_ID" \\
             --output "$GITHUB_STEP_SUMMARY" --append{annotations_flag}
-
+{smoke_summary}
       - name: Upload AgentKit quality artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: agentkit-quality-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
-          path: .agent/state/runs/${{{{ env.AGENTKIT_CI_RUN_ID }}}}/ci-artifacts
-          if-no-files-found: error
+          path: |
+            .agent/state/runs/${{{{ env.AGENTKIT_CI_RUN_ID }}}}/ci-artifacts
+{smoke_artifact}          if-no-files-found: error
           retention-days: {config.artifact_retention_days}
 
       - name: Enforce AgentKit quality result
@@ -115,7 +153,8 @@ jobs:
             echo "AgentKit did not produce ci-exit-code" >&2
             exit 2
           fi
-          exit "$(cat "$EXIT_FILE")"
+          QUALITY_EXIT="$(cat "$EXIT_FILE")"
+{smoke_enforce}          exit "$QUALITY_EXIT"
 '''
 
 

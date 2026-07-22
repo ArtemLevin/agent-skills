@@ -78,8 +78,20 @@ ai-cache-clear:
 ai-context-maintain: ai-profile-refresh ai-cache-prune ai-cache-stats
 """
 
-_INCLUDE_BLOCK = """\n# BEGIN AGENTKIT\n-include .agent/Makefile.agent\n# END AGENTKIT\n"""
-_GITIGNORE_BLOCK = """\n# BEGIN AGENTKIT\ngraphify-out/\n.agent/state/\n.agent/cache/\n.agent/project-profile.json\n# END AGENTKIT\n"""
+_INCLUDE_BLOCK = """
+# BEGIN AGENTKIT
+-include .agent/Makefile.agent
+# END AGENTKIT
+"""
+_GITIGNORE_BLOCK = """
+# BEGIN AGENTKIT
+graphify-out/
+.agent/state/
+.agent/cache/
+.agent/evals/
+.agent/project-profile.json
+# END AGENTKIT
+"""
 
 
 def _source_kit_root() -> Path | None:

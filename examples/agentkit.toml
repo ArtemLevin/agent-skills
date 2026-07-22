@@ -106,6 +106,24 @@ package_spec = "agent-skills-engineering-kit[quality]"
 artifact_retention_days = 7
 cache_enabled = true
 annotations = false
+eval_smoke_enabled = false
+eval_manifest_directory = "evals/tasks"
+eval_repetitions = 1
+
+[eval]
+default_repetitions = 1
+max_repetitions = 10
+command_timeout_seconds = 900
+keep_workspaces = false
+report_limit = 50
+
+[eval.regression]
+acceptance_rate_drop = 0.0
+ready_rate_drop = 0.0
+quality_gate_pass_rate_drop = 0.0
+agent_calls_increase = 1.0
+duration_increase_percent = 25.0
+new_critical_hotspots_increase = 0.0
 
 [verification]
 commands = [
