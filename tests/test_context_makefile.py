@@ -19,6 +19,18 @@ class ContextMakefileTests(unittest.TestCase):
         ):
             self.assertIn(target, MAKEFILE_AGENT)
 
+    def test_exposes_model_routes_without_forcing_a_cli_override(self) -> None:
+        for target in (
+            "ai-model-doctor:",
+            "ai-models:",
+            "ai-route:",
+            "ai-provider-test:",
+        ):
+            self.assertIn(target, MAKEFILE_AGENT)
+        self.assertIn("AGENT ?=\n", MAKEFILE_AGENT)
+        self.assertIn("MODEL_PHASE ?=\n", MAKEFILE_AGENT)
+        self.assertIn('$(if $(AGENT),--agent "$(AGENT)",)', MAKEFILE_AGENT)
+
 
 if __name__ == "__main__":
     unittest.main()

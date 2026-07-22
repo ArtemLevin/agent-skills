@@ -16,6 +16,14 @@ platform = "codex"
 command = ["codex", "exec", "{prompt}"]
 timeout_seconds = 1800
 
+[models]
+# Disabled preserves the 0.10 fixed-CLI behavior. Configure routes and targets
+# before enabling phase-aware OpenAI execution.
+enabled = false
+default_route = "standard"
+max_retries = 1
+max_fallbacks = 1
+
 [graphify]
 enabled = true
 required = false
@@ -45,9 +53,9 @@ hard_duration_seconds = 3600
 unknown_usage_policy = "warn"
 
 [budget.phase_agent_call_limits]
-plan = 1
+plan = 3
 implementation = 1
-review = 2
+review = 3
 targeted_fix = 1
 
 [context]
@@ -124,9 +132,9 @@ class BudgetConfig:
     unknown_usage_policy: str = "warn"
     phase_agent_call_limits: dict[str, int] = field(
         default_factory=lambda: {
-            "plan": 1,
+            "plan": 3,
             "implementation": 1,
-            "review": 2,
+            "review": 3,
             "targeted_fix": 1,
         }
     )

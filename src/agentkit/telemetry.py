@@ -283,6 +283,16 @@ class UsageLedger:
         totals["duration_seconds"] = round(float(totals["duration_seconds"]), 3)
         return totals
 
+    def provider_totals(self) -> dict[str, dict[str, Any]]:
+        providers: dict[str, UsageLedger] = {}
+        for event in self.events:
+            ledger = providers.setdefault(
+                event.provider,
+                UsageLedger(run_id=self.run_id, provider=event.provider),
+            )
+            ledger.events.append(event)
+        return {name: ledger.totals() for name, ledger in sorted(providers.items())}
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "version": 1,
@@ -290,6 +300,7 @@ class UsageLedger:
             "provider": self.provider,
             "totals": self.totals(),
             "phases": self.phase_totals(),
+            "providers": self.provider_totals(),
             "events": [event.to_dict() for event in self.events],
         }
 

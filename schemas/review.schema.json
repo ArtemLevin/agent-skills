@@ -4,7 +4,7 @@
   "title": "Adversarial review result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["verdict", "findings", "criteria_checked", "confidence"],
+  "required": ["verdict", "findings", "criteria_checked", "remaining_risks", "confidence"],
   "properties": {
     "verdict": {"type": "string", "enum": ["approved", "approved_with_non_blocking_findings", "changes_required"]},
     "findings": {
@@ -12,10 +12,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["severity", "location", "issue", "evidence", "smallest_fix"],
+        "required": ["severity", "file", "issue", "evidence", "smallest_fix"],
         "properties": {
           "severity": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
-          "location": {"type": "string"},
+          "file": {"type": "string"},
           "issue": {"type": "string"},
           "evidence": {"type": "string"},
           "smallest_fix": {"type": "string"}

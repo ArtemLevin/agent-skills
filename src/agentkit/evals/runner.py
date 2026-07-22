@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 from uuid import uuid4
 
 from agentkit.config import load_config
 from agentkit.init_project import initialize_project
+from agentkit.model_runtime import ModelRoutingRunner
 from agentkit.models import RunMode
-from agentkit.quality.routing_integration import RoutingAwareRunner
 from agentkit.runner import RunRequest
 
 from .collector import (
@@ -134,9 +133,15 @@ def _copy_agent_artifacts(source: Path | None, target: Path) -> Path | None:
         "quality-route.json",
         "verification-plan.json",
         "context.json",
+        "model-route.json",
+        "model-attempts.json",
     }
     for path in source.iterdir():
-        if path.is_file() and (path.name in allowed or path.name.startswith("verification-after-fix-")):
+        if path.is_file() and (
+            path.name in allowed
+            or path.name.startswith("verification-after-fix-")
+            or path.name.startswith("prompt-prefix-")
+        ):
             shutil.copy2(path, target / path.name)
     return target
 
@@ -166,13 +171,15 @@ class EvaluationHarness:
     @staticmethod
     def _default_executor(workspace: Path, manifest: EvaluationManifest) -> EvaluationExecution:
         config = load_config(workspace)
+        route = manifest.experiment.get("model_route")
         request = RunRequest(
             task=manifest.task,
             mode=RunMode(manifest.mode),
             approve_deep=True,
             skip_graph=manifest.experiment.get("graphify") is False,
+            route_override=str(route) if route else None,
         )
-        outcome = RoutingAwareRunner(workspace, config=config).run(request)
+        outcome = ModelRoutingRunner(workspace, config=config).run(request)
         directory = workspace / ".agent" / "state" / "runs" / outcome.run_id
         return EvaluationExecution(
             source_run_id=outcome.run_id,

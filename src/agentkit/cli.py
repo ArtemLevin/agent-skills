@@ -46,6 +46,10 @@ def _add_task_arguments(parser: argparse.ArgumentParser) -> None:
         help="Override selected agent platform",
     )
     parser.add_argument(
+        "--route",
+        help="Select a configured phase-aware model route",
+    )
+    parser.add_argument(
         "--approve-deep",
         action="store_true",
         help="Authorize deep-mode code execution",
@@ -210,6 +214,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Aggregate usage and readiness across recent runs",
     )
     report.add_argument("--limit", type=int, default=20)
+    sub.add_parser("models", help="Inspect phase-aware model routes")
+    sub.add_parser("providers", help="Inspect configured model providers")
     return parser
 
 
@@ -407,6 +413,8 @@ def main(argv: list[str] | None = None) -> int:
             _print(result.to_dict())
             return 0 if result.passed else result.returncode or 2
         if args.command in {"run", "plan"}:
+            if args.agent and args.route:
+                raise AgentKitError("Use either --agent or --route, not both")
             request = RunRequest(
                 task=_task_from_args(args),
                 mode=RunMode(args.mode),
@@ -415,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
                 approve_deep=args.approve_deep,
                 skip_graph=args.skip_graph,
+                route_override=args.route,
             )
             outcome = AgentKitRunner(
                 project_root,

@@ -151,6 +151,18 @@ def collect_efficiency(source_run_directory: Path | None) -> EfficiencyMetrics:
         if isinstance(candidates, list):
             context_files = len({str(item.get("file", "")) for item in candidates if isinstance(item, dict)})
             context_symbols = sum(1 for item in candidates if isinstance(item, dict) and item.get("symbol"))
+    model_route = _json(source_run_directory / "model-route.json")
+    attempts = _json(source_run_directory / "model-attempts.json").get("attempts", [])
+    providers: set[str] = set()
+    models: set[str] = set()
+    if isinstance(attempts, list):
+        for attempt in attempts:
+            if not isinstance(attempt, dict):
+                continue
+            if attempt.get("provider"):
+                providers.add(str(attempt["provider"]))
+            if attempt.get("model"):
+                models.add(str(attempt["model"]))
     return EfficiencyMetrics(
         agent_calls=_int(totals.get("agent_calls")),
         tool_calls=_int(totals.get("tool_calls")),
@@ -165,6 +177,9 @@ def collect_efficiency(source_run_directory: Path | None) -> EfficiencyMetrics:
         context_files=context_files,
         context_symbols=context_symbols,
         context_cache_hit=context_cache_hit,
+        model_route=str(model_route.get("route", "")),
+        providers=tuple(sorted(providers)),
+        models=tuple(sorted(models)),
     )
 
 

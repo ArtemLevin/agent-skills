@@ -7,6 +7,9 @@ from . import cli as core_cli
 from .config import configured_project_root
 from .evals.cli import efficiency_main, eval_main, quality_history_main
 from .evals.resources import ensure_evaluation_files
+from .model_runtime import ModelRoutingRunner
+from .model_runtime.cli import models_main, providers_main
+from .model_runtime.resources import ensure_model_runtime_files
 from .quality.ci_cli import main as ci_main
 from .quality.cli import main as quality_main
 from .quality.hotspot_cli import main as hotspot_context_main
@@ -15,9 +18,8 @@ from .quality.resources_ci import ensure_quality_ci_files
 from .quality.resources_gate import ensure_quality_gate_project_files
 from .quality.resources_hotspot import ensure_hotspot_context_files
 from .quality.resources_routing import ensure_quality_routing_files
-from .quality.routing_cli import ROUTING_COMMANDS, main as quality_routing_main
-from .quality.routing_integration import RoutingAwareRunner
-
+from .quality.routing_cli import ROUTING_COMMANDS
+from .quality.routing_cli import main as quality_routing_main
 
 _EVALUATION_QUALITY_COMMANDS = {"trend", "regressions", "report"}
 
@@ -79,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
             return eval_main(_subcommand_argv(args, position))
         if command == "efficiency":
             return efficiency_main(_subcommand_argv(args, position))
+        if command == "models":
+            return models_main(_subcommand_argv(args, position))
+        if command == "providers":
+            return providers_main(_subcommand_argv(args, position))
         if command == "quality":
             quality_args = _subcommand_argv(args, position)
             quality_command = _quality_command(quality_args)
@@ -89,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             return quality_main(quality_args)
         if command == "hotspot-context":
             return hotspot_context_main(_subcommand_argv(args, position))
-        core_cli.AgentKitRunner = RoutingAwareRunner
+        core_cli.AgentKitRunner = ModelRoutingRunner
         result = core_cli.main(args)
         if command == "init" and result == 0:
             root = configured_project_root(_project_root_arg(args))
@@ -99,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
             ensure_quality_routing_files(root)
             ensure_quality_ci_files(root)
             ensure_evaluation_files(root)
+            ensure_model_runtime_files(root)
         return result
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(
