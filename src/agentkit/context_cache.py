@@ -4,6 +4,7 @@ import json
 import shutil
 import sqlite3
 import time
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -62,20 +63,20 @@ class ContextCache:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             self._validate_existing()
-            with self._connect() as connection:
+            with closing(self._connect()) as connection:
                 connection.executescript(_SCHEMA)
         except sqlite3.DatabaseError as exc:
             quarantined = self._quarantine()
             self.recovery_warning = (
                 f"Corrupted context cache was quarantined at {quarantined}: {exc}"
             )
-            with self._connect() as connection:
+            with closing(self._connect()) as connection:
                 connection.executescript(_SCHEMA)
 
     def _validate_existing(self) -> None:
         if not self.path.is_file() or self.path.stat().st_size == 0:
             return
-        with sqlite3.connect(self.path, timeout=10) as connection:
+        with closing(sqlite3.connect(self.path, timeout=10)) as connection:
             result = connection.execute("PRAGMA quick_check").fetchone()
         if not result or str(result[0]).lower() != "ok":
             raise sqlite3.DatabaseError(
@@ -119,7 +120,7 @@ class ContextCache:
 
     def get(self, namespace: str, cache_key: str, *, fingerprint: str) -> CacheEntry | None:
         now = time.time()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = connection.execute(
                 "SELECT * FROM context_entries WHERE namespace = ? AND cache_key = ?",
                 (namespace, cache_key),
@@ -167,7 +168,7 @@ class ContextCache:
         expires_at = now + ttl_seconds if ttl_seconds > 0 else None
         payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False, separators=(",", ":"))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute(
                 """
                 INSERT INTO context_entries (
@@ -202,7 +203,7 @@ class ContextCache:
 
     def stats(self) -> dict[str, Any]:
         now = time.time()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             total = int(connection.execute("SELECT COUNT(*) FROM context_entries").fetchone()[0])
             expired = int(
                 connection.execute(
@@ -238,14 +239,14 @@ class ContextCache:
             params = (namespace,)
         query += " ORDER BY last_accessed_at DESC LIMIT ?"
         params += (max(1, limit),)
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute(query, params).fetchall()
         return [self._decode(row).to_dict() for row in rows]
 
     def prune(self, *, max_age_days: int = 30) -> dict[str, int]:
         now = time.time()
         cutoff = now - max(0, max_age_days) * 86400
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             cursor = connection.execute(
                 """
                 DELETE FROM context_entries
@@ -259,7 +260,7 @@ class ContextCache:
         return {"deleted_entries": deleted, "max_age_days": max_age_days}
 
     def clear(self) -> dict[str, int]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             cursor = connection.execute("DELETE FROM context_entries")
             connection.commit()
             deleted = int(cursor.rowcount if cursor.rowcount is not None else 0)

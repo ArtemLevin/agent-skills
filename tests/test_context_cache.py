@@ -1,13 +1,35 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agentkit.context_cache import ContextCache
 
 
 class ContextCacheTests(unittest.TestCase):
+    def test_every_sqlite_connection_is_closed_after_use(self) -> None:
+        real_connect = sqlite3.connect
+        connections: list[sqlite3.Connection] = []
+
+        def tracked_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+            connection = real_connect(*args, **kwargs)
+            connections.append(connection)
+            return connection
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("agentkit.context_cache.sqlite3.connect", side_effect=tracked_connect):
+                cache = ContextCache(Path(directory) / "context.db")
+                cache.put("test", "key", fingerprint="fp", payload={"ok": True})
+                cache.stats()
+
+        self.assertTrue(connections)
+        for connection in connections:
+            with self.assertRaises(sqlite3.ProgrammingError):
+                connection.execute("SELECT 1")
+
     def test_roundtrip_requires_matching_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             cache = ContextCache(Path(directory) / "cache.db")
