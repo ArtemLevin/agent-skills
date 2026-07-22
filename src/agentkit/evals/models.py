@@ -116,6 +116,9 @@ class EfficiencyMetrics:
     context_files: int | None = None
     context_symbols: int | None = None
     context_cache_hit: bool | None = None
+    model_route: str = ""
+    providers: tuple[str, ...] = ()
+    models: tuple[str, ...] = ()
 
     @property
     def token_usage_complete(self) -> bool:

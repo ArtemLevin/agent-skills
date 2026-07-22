@@ -5,6 +5,51 @@ platform = "codex"
 command = ["codex", "exec", "{prompt}"]
 timeout_seconds = 1800
 
+[models]
+enabled = true
+default_route = "standard"
+max_retries = 1
+max_fallbacks = 1
+
+[models.routes.fast]
+plan = "legacy-cli"
+implementation = "legacy-cli"
+review = "openai-review"
+targeted_fix = "legacy-cli"
+
+[models.routes.standard]
+plan = "openai-plan"
+implementation = "legacy-cli"
+review = "openai-review"
+targeted_fix = "legacy-cli"
+
+[models.routes.deep]
+plan = "openai-plan"
+implementation = "legacy-cli"
+review = "openai-review"
+targeted_fix = "legacy-cli"
+
+[models.targets.openai-plan]
+provider = "openai"
+model = "configured-planning-model"
+api_key_env = "OPENAI_API_KEY"
+timeout_seconds = 300
+store = false
+prompt_caching = true
+
+[models.targets.openai-review]
+provider = "openai"
+model = "configured-review-model"
+api_key_env = "OPENAI_API_KEY"
+timeout_seconds = 300
+store = false
+structured_outputs = true
+prompt_caching = true
+
+[models.fallback]
+plan = ["legacy-cli"]
+review = ["legacy-cli"]
+
 [graphify]
 enabled = true
 required = false
@@ -33,9 +78,9 @@ hard_duration_seconds = 3600
 unknown_usage_policy = "warn"
 
 [budget.phase_agent_call_limits]
-plan = 1
+plan = 3
 implementation = 1
-review = 2
+review = 3
 targeted_fix = 1
 
 [context]

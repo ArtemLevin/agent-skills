@@ -59,6 +59,8 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(totals["tool_calls"], 1)
         self.assertEqual(totals["input_tokens"], 100)
         self.assertEqual(totals["duration_seconds"], 3.5)
+        self.assertEqual(ledger.provider_totals()["codex"]["agent_calls"], 1)
+        self.assertEqual(ledger.provider_totals()["local"]["tool_calls"], 1)
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "usage.json"

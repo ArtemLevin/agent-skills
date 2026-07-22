@@ -2,7 +2,7 @@
 
 **Status:** Active roadmap  
 **Last updated:** 2026-07-22  
-**Current stable baseline:** AgentKit 0.4.0  
+**Current stable baseline:** AgentKit 0.10.0
 **Target:** AgentKit 1.0 — measurable, quality-aware, provider-independent supervised autopilot for software engineering
 
 ---
@@ -41,6 +41,12 @@ The following foundation is already merged into `main`.
 | Graph-aware autopilot | 0.2 | Graphify integration, agent adapters, state machine, verification, review, completion gate | Complete |
 | Telemetry and budgets | 0.3 | Usage ledger, token/call/time budgets, reports, budget gate | Complete |
 | Context compiler and cache | 0.4 | Project profile, phase context, SQLite cache, fingerprint invalidation | Complete |
+| Quality diagnostics | 0.5 | StrictaCode adapter, bounded snapshots, report-only evidence | Complete |
+| Quality regression gate | 0.6 | Baseline/current comparison and configurable enforcement | Complete |
+| Hotspot-aware context | 0.7 | Task-relevant quality context and cache invalidation | Complete |
+| Quality-aware routing | 0.8 | Risk refinement and verification planning | Complete |
+| Quality CI | 0.9 | Merge-base comparison and PR summaries | Complete |
+| Trends and evaluation | 0.10 | Reproducible fixtures, outcome reports, and regressions | Complete |
 
 The current workflow is:
 
@@ -50,11 +56,12 @@ user task
   -> task triage
   -> Graphify context
   -> task packet
+  -> quality-aware route and verification plan
   -> coding-agent implementation
   -> verification
   -> adversarial review
   -> bounded targeted fix
-  -> completion gate
+  -> functional, budget, scope, and quality gates
 ```
 
 The current completion gate evaluates:
@@ -62,9 +69,10 @@ The current completion gate evaluates:
 - verification results;
 - adversarial review;
 - changed-file scope;
-- configured token/call/time budget.
+- configured token/call/time budget;
+- configured quality and maintainability regressions.
 
-It does not yet evaluate maintainability regression or code-health changes.
+The remaining pre-1.0 capability gap is measurable phase-aware model selection, addressed by PR 11 on its implementation branch.
 
 ---
 
@@ -1288,6 +1296,8 @@ verification policy version
 **Branch:** `agent/model-router-api-adapters`  
 **Planned version:** `0.11.0`
 
+**Implementation status:** complete on the PR branch; awaiting review and live opt-in provider evaluation.
+
 ## Goal
 
 Add direct provider adapters and select models according to task risk, required capabilities, measured quality, and configured cost limits.
@@ -1298,17 +1308,17 @@ This PR is deliberately scheduled after the evaluation harness so routing decisi
 
 - provider capability interface;
 - OpenAI adapter;
-- Anthropic adapter;
-- Ollama adapter;
-- OpenAI-compatible adapter;
 - structured-output support;
 - exact usage capture;
 - prompt-cache metadata;
-- session/resume capability;
-- deterministic routing policy;
+- deterministic phase routing policy;
 - bounded fallback.
 
 CLI adapters remain supported as fallback.
+
+Anthropic, Ollama, and generic OpenAI-compatible adapters are deferred. PR 11 intentionally limits direct API support to OpenAI while retaining the local CLI as the only mutation-capable executor.
+
+Implemented artifacts include phase-specific routing, the optional Responses API adapter, native review schemas, exact usage and cache metadata, bounded read-only retry/fallback, CLI diagnostics, Make targets, evaluation dimensions, installation resources, and mocked integration coverage. Live provider calls remain explicitly opt-in because they incur cost and require a user-supplied API key.
 
 ## Provider capabilities
 
@@ -1316,10 +1326,11 @@ CLI adapters remain supported as fallback.
 @dataclass(frozen=True)
 class AgentCapabilities:
     structured_outputs: bool
-    usage_metadata: bool
+    exact_usage: bool
     prompt_caching: bool
     session_resume: bool
     tool_calling: bool
+    local_workspace_mutation: bool
     read_only_mode: bool
     reasoning_control: bool
     max_context_tokens: int | None
@@ -1329,28 +1340,38 @@ class AgentCapabilities:
 
 ```toml
 [models]
+enabled = true
 default_route = "standard"
+max_retries = 1
 max_fallbacks = 1
 
-[models.routes.fast]
-provider = "ollama"
-model = "local-coder"
-
-[models.routes.standard]
-provider = "openai"
-model = "configured-coding-model"
-
-[models.routes.deep]
-provider = "anthropic"
-model = "configured-reasoning-model"
-
-[models.routes.review]
-provider = "openai"
-model = "configured-review-model"
-
-[models.fallback]
+[models.targets.local]
 provider = "cli"
 platform = "codex"
+command = ["codex", "exec", "{prompt}"]
+
+[models.targets.openai-plan]
+provider = "openai"
+model = "configured-planning-model"
+api_key_env = "OPENAI_API_KEY"
+store = false
+
+[models.targets.openai-review]
+provider = "openai"
+model = "configured-review-model"
+api_key_env = "OPENAI_API_KEY"
+store = false
+structured_outputs = true
+
+[models.routes.standard]
+plan = "openai-plan"
+implementation = "local"
+review = "openai-review"
+targeted_fix = "local"
+
+[models.fallback]
+plan = ["legacy-cli"]
+review = ["legacy-cli"]
 ```
 
 No API key is stored in TOML.
@@ -1427,8 +1448,7 @@ make ai TASK="..." MODEL_ROUTE=standard
 - route selection boundaries;
 - secret redaction;
 - prompt-prefix stability;
-- mocked API integration;
-- Ollama/OpenAI-compatible compatibility contract.
+- mocked API integration.
 
 ## Acceptance criteria
 
@@ -1818,19 +1838,14 @@ May be added as an explicitly enabled delivery plugin. Automatic merge and produ
 
 ## 14. Immediate Next Action
 
-Implement **PR 5 — Quality Diagnostics Provider** in report-only mode.
+Review and merge **PR 11 — Model Router and Direct API Adapters**.
 
-The first implementation slice should contain:
+Before merge:
 
-1. quality provider protocol and models;
-2. StrictaCode doctor and JSON adapter;
-3. bounded `QualitySnapshot` and hotspot schema;
-4. optional installation extra;
-5. SQLite cache namespace;
-6. telemetry integration;
-7. CLI and Make commands;
-8. fixture-based parser tests;
-9. runner integration without completion blocking;
-10. documentation for availability, supported languages, and limitations.
+1. review the local-mutation boundary and secret-handling paths;
+2. confirm the mocked OpenAI adapter, retry, fallback, schema, and packaging tests;
+3. run an explicitly authorized live provider smoke test with a user-supplied API key;
+4. run at least one opt-in evaluation comparing the configured route with the CLI baseline;
+5. record any quality or acceptance regression before changing route defaults.
 
-PR 5 should not begin baseline enforcement. Its purpose is to make quality evidence stable, inspectable, cacheable, and inexpensive enough for later routing and gate decisions.
+After PR 11, begin **PR 12 — AgentKit 1.0 Stabilization and Release**. No additional direct provider adapter is required for 1.0; Anthropic, Ollama, and generic compatible endpoints remain deferred until evaluation evidence justifies them.

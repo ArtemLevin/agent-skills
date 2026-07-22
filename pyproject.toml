@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-skills-engineering-kit"
-version = "0.10.0"
-description = "Quality-aware supervised autopilot with deterministic engineering evaluation trends"
+version = "0.11.0"
+description = "OpenAI-routed supervised autopilot with phase-aware execution and exact usage"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 readme = "README.md"
@@ -19,6 +19,9 @@ quality = [
 ]
 eval = [
   "PyYAML>=6,<7"
+]
+openai = [
+  "openai>=2,<3"
 ]
 
 [project.scripts]

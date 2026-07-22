@@ -1,6 +1,6 @@
 # Agent Skills Engineering Kit
 
-Graph-aware **supervised autopilot** for AI-assisted software development.
+Graph-aware **supervised autopilot** for AI-assisted software development, with optional phase-aware OpenAI routing.
 
 The repository combines two layers:
 
@@ -10,7 +10,7 @@ Graphify      -> local code graph and scoped repository context
 AgentKit CLI  -> executable workflow that connects them to a coding-agent CLI
 ```
 
-The default workflow does not commit, push, merge, deploy, or perform destructive migrations. It prepares a verified change for human review.
+The default workflow does not commit, push, merge, deploy, or perform destructive migrations. It prepares a verified change for human review. Direct OpenAI API execution is restricted to read-only planning and review; repository edits continue through the configured local coding-agent CLI.
 
 ## What is included
 
@@ -72,6 +72,12 @@ For local development:
 git clone https://github.com/ArtemLevin/agent-skills.git
 cd agent-skills
 python -m pip install -e .
+```
+
+Install the optional OpenAI adapter with:
+
+```bash
+python -m pip install -e '.[openai]'
 ```
 
 ## Initialize a target project
@@ -161,6 +167,10 @@ agentkit graph query "question"
 agentkit check
 agentkit doctor
 agentkit status
+agentkit models doctor
+agentkit models list
+agentkit models route --task "question"
+agentkit providers test openai
 ```
 
 Make aliases:
@@ -205,9 +215,17 @@ commands = [
 
 [scope]
 max_changed_files = 20
+
+[models]
+enabled = false
+default_route = "standard"
+max_retries = 1
+max_fallbacks = 1
 ```
 
 Every command is stored as an argv array. AgentKit does not evaluate configured commands through a shell.
+
+See [OpenAI model routing](docs/model-routing-openai.md) for phase targets, environment-key configuration, structured review output, bounded fallback, and run artifacts. Provider tests are diagnostic-only unless `--live` is supplied.
 
 ## Coding-agent adapters
 
@@ -258,6 +276,9 @@ Each run creates:
 ├── task-packet.json
 ├── implementation-prompt.md
 ├── implementation-command.json
+├── model-route.json
+├── model-attempts.json
+├── prompt-prefix-<phase>.json
 ├── verification.json
 ├── review.json
 └── completion.json
@@ -297,13 +318,14 @@ make validate
 
 ## Status
 
-The CLI is an MVP. Its intended default is **supervised autopilot**: autonomous context gathering, implementation, checking, and review, followed by a human decision. Autonomous commits and draft PRs are deliberately outside the first release.
+The CLI is a pre-1.0 supervised-autopilot release: autonomous context gathering, implementation, checking, and review, followed by a human decision. OpenAI model routing is opt-in and the CLI-only path remains the default. Autonomous commits, merges, and deployments remain outside the runtime contract.
 
 ## Documentation
 
 - [Beginner guide](docs/agentkit-guide.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/agentkit-security.md)
+- [OpenAI model routing](docs/model-routing-openai.md)
 - [Skill activation matrix](docs/activation-matrix.md)
 - [Adoption guide](docs/adoption-guide.md)
 - [Contributing](CONTRIBUTING.md)

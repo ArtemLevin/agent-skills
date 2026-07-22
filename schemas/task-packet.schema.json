@@ -23,6 +23,7 @@
     },
     "quality": {"type": "object"},
     "quality_route": {"type": "object"},
+    "model_route": {"$ref": "model-route.schema.json"},
     "verification_plan": {"type": "object"},
     "git_head": {"type": "string"},
     "limits": {
