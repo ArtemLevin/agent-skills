@@ -2,6 +2,16 @@
 
 AgentKit 1.0 freezes the following top-level commands: `init`, `run`, `plan`, `graph`, `profile`, `context`, `cache`, `check`, `doctor`, `status`, `usage`, `budget`, `report`, `models`, `providers`, `quality`, `ci`, `eval`, `efficiency`, `hotspot-context`, `migrate`, `self-test`, `diagnostics`, and `version`.
 
+Graphify commands:
+
+```bash
+agentkit graph install --platform agents
+agentkit graph update
+agentkit graph query "question"
+```
+
+`graph install` is an idempotent project repair/registration command. AgentKit resolves Graphify from the user `PATH` or from its own Python/`uv tool` environment before invoking the project-scoped installer.
+
 Release and recovery commands:
 
 ```bash

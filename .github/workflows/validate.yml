@@ -62,13 +62,24 @@ jobs:
           python scripts/normalize_sdist.py dist/*.tar.gz
       - name: Check package metadata
         run: python -m twine check dist/*
-      - name: Smoke installed wheel in a path with spaces
+      - name: Smoke installed wheel and hidden dependency executable
         run: |
           python -m venv "/tmp/agentkit release smoke"
           "/tmp/agentkit release smoke/bin/python" -m pip install dist/*.whl
           mkdir -p "/tmp/agentkit project with spaces"
           git -C "/tmp/agentkit project with spaces" init -q
-          "/tmp/agentkit release smoke/bin/agentkit" --project-root "/tmp/agentkit project with spaces" init --skip-graphify-install
+          "/tmp/agentkit release smoke/bin/agentkit" --project-root "/tmp/agentkit project with spaces" init --platform agents
+          test -d "/tmp/agentkit project with spaces/.agents/skills/graphify"
+          "/tmp/agentkit release smoke/bin/agentkit" --project-root "/tmp/agentkit project with spaces" doctor > /tmp/agentkit-doctor.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/agentkit-doctor.json').read_text())
+          graphify = payload['graphify']
+          assert graphify['installed'] is True, graphify
+          assert graphify['executable_source'] == 'agentkit_tool_environment', graphify
+          assert graphify['project_skill_installed'] is True, graphify
+          PY
           "/tmp/agentkit release smoke/bin/agentkit" --project-root "/tmp/agentkit project with spaces" self-test
       - name: Smoke source distribution without optional providers
         run: |

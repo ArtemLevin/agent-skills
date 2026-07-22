@@ -14,7 +14,9 @@ from typing import Any
 
 from .context_cache import ContextCache
 from .contracts import ARTIFACT_SCHEMAS, DIAGNOSTICS_VERSION, PACKAGE_VERSION, PublicContracts
+from .executables import resolve_graphify_executable
 from .git import is_git_repository
+from .graphify import find_graphify_project_skill
 from .installation import installation_manifest, migration_report
 from .redaction import redact, redact_text
 from .state import RunState
@@ -27,6 +29,7 @@ def version_payload(project_root: Path) -> dict[str, Any]:
     except (OSError, TypeError, ValueError) as exc:
         manifest = None
         manifest_error = str(exc)
+    graphify = resolve_graphify_executable()
     return {
         "agentkit_version": PACKAGE_VERSION,
         "python_version": platform.python_version(),
@@ -45,7 +48,10 @@ def version_payload(project_root: Path) -> dict[str, Any]:
             "openai": importlib.util.find_spec("openai") is not None,
             "yaml": importlib.util.find_spec("yaml") is not None,
             "strictacode": shutil.which("strictacode") is not None,
-            "graphify": shutil.which("graphify") is not None,
+            "graphify": graphify.found,
+        },
+        "dependency_executables": {
+            "graphify": graphify.to_dict(),
         },
     }
 
@@ -154,6 +160,24 @@ def self_test(project_root: Path) -> dict[str, Any]:
             required=models_enabled,
         )
     )
+
+    graphify = resolve_graphify_executable()
+    graphify_skill = find_graphify_project_skill(project_root)
+    graphify_ready = graphify.found and graphify_skill is not None
+    checks.append(
+        _check(
+            "graphify",
+            graphify_ready,
+            (
+                f"{graphify.source}; project skill={graphify_skill}"
+                if graphify_ready
+                else "run agentkit graph install --platform agents"
+            ),
+            required=False,
+        )
+    )
+    if not graphify_ready:
+        warnings.append("Graphify is not fully connected; run agentkit graph install --platform agents")
 
     try:
         from .init_project import initialize_project
