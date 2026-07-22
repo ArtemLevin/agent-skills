@@ -67,6 +67,23 @@ max_methods = 15
 max_functions = 15
 include = []
 exclude = ["vendor", "generated", ".venv", "node_modules"]
+baseline_strategy = "run_start"
+base_branch = "main"
+baseline_file = ""
+unavailable_policy = "warn"
+
+[quality.absolute]
+score = 0
+rp = 0
+op = 0
+density = 0.0
+
+[quality.delta]
+score = 5
+rp = 5
+op = 5
+density = 3.0
+new_critical_hotspots = 0
 
 [verification]
 commands = [
@@ -81,8 +98,10 @@ max_changed_files = 20
 [security]
 allowed_executables = [
   "git", "python", "python3", "uv", "pytest", "ruff", "mypy",
-  "npm", "pnpm", "yarn", "make", "codex", "claude", "gemini", "aider", "graphify", "strictacode"
+  "npm", "pnpm", "yarn", "make", "codex", "claude", "gemini",
+  "aider", "graphify", "strictacode"
 ]
 denied_substrings = [
-  "rm -rf /", "git push --force", "git reset --hard", "drop database", "truncate table"
+  "rm -rf /", "git push --force", "git reset --hard",
+  "drop database", "truncate table"
 ]

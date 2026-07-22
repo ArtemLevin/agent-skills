@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-skills-engineering-kit"
-version = "0.5.0"
-description = "Graph-aware supervised autopilot with telemetry, cached context, and report-only quality diagnostics"
+version = "0.6.0"
+description = "Quality-aware supervised autopilot with regression gates, telemetry, and bounded context"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 readme = "README.md"

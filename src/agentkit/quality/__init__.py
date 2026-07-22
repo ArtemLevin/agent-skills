@@ -1,5 +1,20 @@
 from .base import QualityProvider
-from .config import QualityConfig, load_quality_config
+from .baseline import BaselineCapture, QualityBaselineManager
+from .comparison import compare_snapshots
+from .config import (
+    AbsoluteThresholds,
+    DeltaThresholds,
+    QualityConfig,
+    load_quality_config,
+)
+from .gate import evaluate_quality_gate
+from .gate_models import (
+    QualityDiff,
+    QualityGateResult,
+    QualityGateViolation,
+    QualityMetricDelta,
+)
+from .lifecycle import QualityCycleResult, QualityLifecycle
 from .models import (
     Availability,
     QualityCapabilities,
@@ -13,11 +28,21 @@ from .service import QualityAnalysisResult, QualityService
 from .strictacode import StrictaCodeProvider
 
 __all__ = [
+    "AbsoluteThresholds",
     "Availability",
+    "BaselineCapture",
+    "DeltaThresholds",
     "QualityAnalysisResult",
+    "QualityBaselineManager",
     "QualityCapabilities",
     "QualityConfig",
+    "QualityCycleResult",
+    "QualityDiff",
+    "QualityGateResult",
+    "QualityGateViolation",
     "QualityHotspot",
+    "QualityLifecycle",
+    "QualityMetricDelta",
     "QualityProject",
     "QualityProvider",
     "QualityProviderStatus",
@@ -25,5 +50,7 @@ __all__ = [
     "QualitySnapshot",
     "QualityStats",
     "StrictaCodeProvider",
+    "compare_snapshots",
+    "evaluate_quality_gate",
     "load_quality_config",
 ]

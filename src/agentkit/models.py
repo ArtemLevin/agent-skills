@@ -24,6 +24,7 @@ class Stage(StrEnum):
     FAILED = "failed"
     APPROVAL_REQUIRED = "approval_required"
     BUDGET_EXCEEDED = "budget_exceeded"
+    QUALITY_GATE_FAILED = "quality_gate_failed"
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,12 @@ class TokenUsage:
     def from_dict(cls, data: dict[str, Any]) -> "TokenUsage":
         def value(name: str) -> int:
             raw = data.get(name, 0)
-            return int(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else 0
+            return (
+                int(raw)
+                if isinstance(raw, (int, float))
+                and not isinstance(raw, bool)
+                else 0
+            )
 
         input_tokens = value("input_tokens")
         output_tokens = value("output_tokens")
@@ -88,7 +94,11 @@ class CommandResult:
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["passed"] = self.passed
-        data["usage"] = self.usage.to_dict() if self.usage is not None else None
+        data["usage"] = (
+            self.usage.to_dict()
+            if self.usage is not None
+            else None
+        )
         return data
 
 
@@ -113,7 +123,11 @@ class ReviewReport:
 
     @property
     def blocking_findings(self) -> list[ReviewFinding]:
-        return [finding for finding in self.findings if finding.blocking]
+        return [
+            finding
+            for finding in self.findings
+            if finding.blocking
+        ]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -135,6 +149,9 @@ class CompletionReport:
     scope_passed: bool
     budget_passed: bool = True
     residual_risks: list[str] = field(default_factory=list)
+    quality_passed: bool = True
+    quality_available: bool = False
+    quality_regressions: list[str] = field(default_factory=list)
 
     @property
     def ready(self) -> bool:
@@ -145,6 +162,7 @@ class CompletionReport:
             and self.blocking_findings == 0
             and self.scope_passed
             and self.budget_passed
+            and self.quality_passed
         )
 
     def to_dict(self) -> dict[str, Any]:
