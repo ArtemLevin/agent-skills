@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .exit_codes import STABLE_EXIT_CODES
 
-PACKAGE_VERSION = "1.0.1"
+PACKAGE_VERSION = "1.0.2"
 CONFIG_VERSION = 1
 INSTALLATION_MANIFEST_VERSION = 1
 RUN_STATE_VERSION = 1
