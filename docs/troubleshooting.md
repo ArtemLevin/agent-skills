@@ -28,6 +28,39 @@ For a one-off semantic graph that includes documentation, invoke Graphify direct
 
 On Windows, AgentKit requests UTF-8 subprocess output and sets `PYTHONUTF8=1` plus `PYTHONIOENCODING=utf-8`; paths containing Cyrillic characters should therefore remain readable in JSON output.
 
+## Graphify query starts from AgentKit schemas or unrelated nodes
+
+AgentKit 1.0.3+ passes the original task text directly to `graphify query`. It no longer prepends generic words such as `task`, `return`, or `smallest`, which could become stronger lexical seeds than the user's identifiers.
+
+The first managed graph refresh also creates or updates a bounded block in `.graphifyignore`:
+
+```gitignore
+# BEGIN AGENTKIT
+.agent/
+.agents/
+graphify-out/
+# END AGENTKIT
+```
+
+User-authored ignore rules outside that block are preserved. When the block is first installed or changed, AgentKit performs one full local rebuild instead of an incremental update so stale `.agent` schema and skill nodes do not survive in `graph.json`. Later refreshes return to `--update`.
+
+For an existing noisy graph, upgrade AgentKit and run:
+
+```bash
+agentkit graph update
+agentkit graph query "Where is lesson.json written atomically?"
+```
+
+For manual investigation, use exact identifiers when known:
+
+```bash
+graphify explain "_synchronize_lesson_files"
+graphify path "_synchronize_lesson_files" "atomic_write_text"
+graphify query "lesson.json _synchronize_lesson_files atomic_write_text" --context call
+```
+
+Increasing the token budget does not improve wrong seed selection; narrow the query or inspect an exact node instead.
+
 ## Incomplete run
 
 Run `agentkit status`. If `mutation_started` is true and `mutation_completed` is false, inspect the working tree manually. Do not repeat the mutating command until the partial diff is understood. Diagnostic collection never resets or hides that diff.
