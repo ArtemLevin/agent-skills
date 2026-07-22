@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-skills-engineering-kit"
-version = "0.4.0"
-description = "Graph-aware supervised autopilot with telemetry, phase context compilation, and SQLite caching"
+version = "0.5.0"
+description = "Graph-aware supervised autopilot with telemetry, cached context, and report-only quality diagnostics"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 readme = "README.md"
@@ -13,8 +13,13 @@ dependencies = [
   "graphifyy>=0.9.23,<1.0"
 ]
 
+[project.optional-dependencies]
+quality = [
+  "strictacode>=0.0.5,<0.1"
+]
+
 [project.scripts]
-agentkit = "agentkit.cli:main"
+agentkit = "agentkit.entrypoint:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
