@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-skills-engineering-kit"
-version = "1.0.2"
+version = "1.0.3"
 description = "OpenAI-routed supervised autopilot with phase-aware execution and exact usage"
 requires-python = ">=3.11"
 license = "MIT"
