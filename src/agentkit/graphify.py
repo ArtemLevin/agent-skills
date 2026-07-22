@@ -14,6 +14,14 @@ from .models import CommandResult
 
 CommandObserver = Callable[[str, CommandResult], None]
 
+_GRAPHIFYIGNORE_BEGIN = "# BEGIN AGENTKIT"
+_GRAPHIFYIGNORE_END = "# END AGENTKIT"
+_GRAPHIFYIGNORE_BLOCK = """# BEGIN AGENTKIT
+.agent/
+.agents/
+graphify-out/
+# END AGENTKIT"""
+
 
 @dataclass(frozen=True)
 class GraphContext:
@@ -47,6 +55,28 @@ def find_graphify_project_skill(project_root: Path) -> Path | None:
         if candidate.is_dir():
             return candidate
     return None
+
+
+def ensure_graphify_ignore(project_root: Path) -> bool:
+    """Exclude AgentKit's generated control plane from the application graph."""
+
+    path = project_root / ".graphifyignore"
+    existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if _GRAPHIFYIGNORE_BEGIN in existing:
+        if _GRAPHIFYIGNORE_END not in existing:
+            raise ValueError(
+                ".graphifyignore contains an incomplete AgentKit managed block"
+            )
+        start = existing.index(_GRAPHIFYIGNORE_BEGIN)
+        end = existing.index(_GRAPHIFYIGNORE_END, start) + len(_GRAPHIFYIGNORE_END)
+        updated = existing[:start] + _GRAPHIFYIGNORE_BLOCK + existing[end:]
+    else:
+        separator = "" if not existing or existing.endswith("\n") else "\n"
+        updated = existing + separator + _GRAPHIFYIGNORE_BLOCK + "\n"
+    if updated == existing:
+        return False
+    path.write_text(updated, encoding="utf-8", newline="\n")
+    return True
 
 
 def _graphify_environment() -> dict[str, str]:
@@ -165,9 +195,10 @@ class GraphifyClient:
     def update(self) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
             return None
+        ignore_changed = ensure_graphify_ignore(self.project_root)
         graph_exists = (self.project_root / "graphify-out" / "graph.json").is_file()
         command = [self.executable, "."]
-        if graph_exists:
+        if graph_exists and not ignore_changed:
             command.append("--update")
         if self.config.directed:
             command.append("--directed")
@@ -177,11 +208,9 @@ class GraphifyClient:
     def query(self, task: str) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
             return None
-        question = (
-            "Identify the smallest relevant code subgraph for this engineering task. "
-            "Return entry points, direct dependencies, callers, related tests, and uncertain inferred links: "
-            + task
-        )
+        question = task.strip()
+        if not question:
+            raise ValueError("Graphify query requires a non-empty task")
         command = [
             self.executable,
             "query",
