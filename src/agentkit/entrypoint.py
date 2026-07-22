@@ -5,6 +5,8 @@ import sys
 
 from . import cli as core_cli
 from .config import configured_project_root
+from .evals.cli import efficiency_main, eval_main, quality_history_main
+from .evals.resources import ensure_evaluation_files
 from .quality.ci_cli import main as ci_main
 from .quality.cli import main as quality_main
 from .quality.hotspot_cli import main as hotspot_context_main
@@ -15,6 +17,9 @@ from .quality.resources_hotspot import ensure_hotspot_context_files
 from .quality.resources_routing import ensure_quality_routing_files
 from .quality.routing_cli import ROUTING_COMMANDS, main as quality_routing_main
 from .quality.routing_integration import RoutingAwareRunner
+
+
+_EVALUATION_QUALITY_COMMANDS = {"trend", "regressions", "report"}
 
 
 def _command_position(argv: list[str]) -> int:
@@ -70,9 +75,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if command == "ci":
             return ci_main(_subcommand_argv(args, position))
+        if command == "eval":
+            return eval_main(_subcommand_argv(args, position))
+        if command == "efficiency":
+            return efficiency_main(_subcommand_argv(args, position))
         if command == "quality":
             quality_args = _subcommand_argv(args, position)
-            if _quality_command(quality_args) in ROUTING_COMMANDS:
+            quality_command = _quality_command(quality_args)
+            if quality_command in _EVALUATION_QUALITY_COMMANDS:
+                return quality_history_main(quality_args)
+            if quality_command in ROUTING_COMMANDS:
                 return quality_routing_main(quality_args)
             return quality_main(quality_args)
         if command == "hotspot-context":
@@ -86,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             ensure_hotspot_context_files(root)
             ensure_quality_routing_files(root)
             ensure_quality_ci_files(root)
+            ensure_evaluation_files(root)
         return result
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(

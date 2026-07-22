@@ -10,5 +10,6 @@ build/
 .DS_Store
 .agent/state/
 .agent/cache/
+.agent/evals/
 .agent/project-profile.json
 graphify-out/
