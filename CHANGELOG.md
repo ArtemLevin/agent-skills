@@ -2,6 +2,13 @@
 
 All notable AgentKit changes are documented here. The project follows semantic versioning from 1.0 onward.
 
+## 1.0.3 — 2026-07-22
+
+- Send the original engineering task to `graphify query` without a generic English instruction prefix that polluted lexical seed selection.
+- Create and maintain a bounded `.graphifyignore` block excluding `.agent/`, `.agents/`, and `graphify-out/` from the application knowledge graph.
+- Force one full local rebuild when the managed ignore policy is first installed or changed; preserve incremental `--update` afterward.
+- Preserve user-authored `.graphifyignore` rules and add regression coverage for raw multilingual queries, self-noise exclusion, and idempotent ignore management.
+
 ## 1.0.2 — 2026-07-22
 
 - Run AgentKit-managed Graphify updates in deterministic local `--code-only` mode so projects containing documentation do not require an LLM API key or trigger provider usage.
