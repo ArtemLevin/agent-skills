@@ -29,8 +29,8 @@ class ReleaseOperationTests(unittest.TestCase):
             result = self_test(root)
             self.assertTrue(result["ready"], result)
             version = version_payload(root)
-            self.assertEqual(version["agentkit_version"], "1.0.2")
-            self.assertEqual(version["installed_project_version"], "1.0.2")
+            self.assertEqual(version["agentkit_version"], "1.0.3")
+            self.assertEqual(version["installed_project_version"], "1.0.3")
 
     def test_diagnostics_bundle_is_bounded_and_redacted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

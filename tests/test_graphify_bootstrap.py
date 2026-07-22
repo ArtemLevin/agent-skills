@@ -16,6 +16,8 @@ from agentkit.entrypoint import main as entrypoint_main
 from agentkit.executables import ExecutableResolution, resolve_executable
 from agentkit.graphify import (
     GraphifyClient,
+    ensure_graphify_ignore,
+    graphify_rebuild_marker,
     install_graphify_project_skill,
 )
 from agentkit.models import CommandResult
@@ -58,6 +60,15 @@ class GraphifyBootstrapTests(unittest.TestCase):
             source="agentkit_tool_environment",
             package="graphifyy",
             package_version="0.9.23",
+        )
+
+    def _result(self, *, returncode: int = 0) -> CommandResult:
+        return CommandResult(
+            command=[],
+            returncode=returncode,
+            stdout="ok" if returncode == 0 else "",
+            stderr="" if returncode == 0 else "failed",
+            duration_seconds=0.1,
         )
 
     def test_project_install_uses_absolute_resolved_executable(self) -> None:
@@ -120,14 +131,7 @@ class GraphifyBootstrapTests(unittest.TestCase):
             root = Path(directory)
             executable = root / "tool env" / "graphify.exe"
             policy = CommandPolicy(["graphify"], [])
-            result = CommandResult(
-                command=[],
-                returncode=0,
-                stdout="ok",
-                stderr="",
-                duration_seconds=0.1,
-            )
-            with patch("agentkit.graphify.run_command", return_value=result) as run:
+            with patch("agentkit.graphify.run_command", return_value=self._result()) as run:
                 client = GraphifyClient(
                     root,
                     GraphifyConfig(),
@@ -148,19 +152,14 @@ class GraphifyBootstrapTests(unittest.TestCase):
     def test_graph_update_preserves_incremental_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            ensure_graphify_ignore(root)
+            graphify_rebuild_marker(root).unlink()
             graph = root / "graphify-out" / "graph.json"
             graph.parent.mkdir(parents=True)
             graph.write_text("{}", encoding="utf-8")
             executable = root / "graphify.exe"
             policy = CommandPolicy(["graphify"], [])
-            result = CommandResult(
-                command=[],
-                returncode=0,
-                stdout="ok",
-                stderr="",
-                duration_seconds=0.1,
-            )
-            with patch("agentkit.graphify.run_command", return_value=result) as run:
+            with patch("agentkit.graphify.run_command", return_value=self._result()) as run:
                 GraphifyClient(
                     root,
                     GraphifyConfig(),
@@ -170,6 +169,80 @@ class GraphifyBootstrapTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("--update", command)
         self.assertIn("--code-only", command)
+
+    def test_graph_update_rebuilds_when_ignore_policy_is_created(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            graph = root / "graphify-out" / "graph.json"
+            graph.parent.mkdir(parents=True)
+            graph.write_text("{}", encoding="utf-8")
+            executable = root / "graphify.exe"
+            policy = CommandPolicy(["graphify"], [])
+            with patch("agentkit.graphify.run_command", return_value=self._result()) as run:
+                GraphifyClient(
+                    root,
+                    GraphifyConfig(),
+                    policy,
+                    resolution=self._resolution(executable),
+                ).update()
+            command = run.call_args.args[0]
+            self.assertNotIn("--update", command)
+            ignore = (root / ".graphifyignore").read_text(encoding="utf-8")
+            self.assertIn(".agent/", ignore)
+            self.assertIn(".agents/", ignore)
+            self.assertFalse(graphify_rebuild_marker(root).exists())
+
+    def test_failed_full_rebuild_preserves_required_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ensure_graphify_ignore(root)
+            graph = root / "graphify-out" / "graph.json"
+            graph.parent.mkdir(parents=True)
+            graph.write_text("{}", encoding="utf-8")
+            executable = root / "graphify.exe"
+            policy = CommandPolicy(["graphify"], [])
+            with patch(
+                "agentkit.graphify.run_command",
+                return_value=self._result(returncode=1),
+            ) as run:
+                GraphifyClient(
+                    root,
+                    GraphifyConfig(),
+                    policy,
+                    resolution=self._resolution(executable),
+                ).update()
+            self.assertNotIn("--update", run.call_args.args[0])
+            self.assertTrue(graphify_rebuild_marker(root).is_file())
+
+    def test_graphify_ignore_preserves_user_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ignore = root / ".graphifyignore"
+            ignore.write_text("generated/\n", encoding="utf-8")
+            self.assertTrue(ensure_graphify_ignore(root))
+            first = ignore.read_text(encoding="utf-8")
+            self.assertIn("generated/", first)
+            self.assertIn(".agent/", first)
+            self.assertFalse(ensure_graphify_ignore(root))
+            self.assertEqual(ignore.read_text(encoding="utf-8"), first)
+            self.assertTrue(graphify_rebuild_marker(root).is_file())
+
+    def test_graph_query_uses_only_the_original_task_as_question(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "graphify.exe"
+            policy = CommandPolicy(["graphify"], [])
+            task = "Где реализовано атомарное сохранение lesson.json?"
+            with patch("agentkit.graphify.run_command", return_value=self._result()) as run:
+                GraphifyClient(
+                    root,
+                    GraphifyConfig(),
+                    policy,
+                    resolution=self._resolution(executable),
+                ).query(task)
+        command = run.call_args.args[0]
+        self.assertEqual(command[1:3], ["query", task])
+        self.assertNotIn("Identify the smallest relevant code subgraph", " ".join(command))
 
     def test_doctor_reports_tool_environment_and_project_skill(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
