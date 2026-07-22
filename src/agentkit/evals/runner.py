@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -113,6 +114,26 @@ def prepare_workspace(source: Path, workspace: Path) -> None:
     _run_git(workspace, "init", "-q")
     _run_git(workspace, "add", "--all")
     _run_git(workspace, "commit", "-q", "-m", "AgentKit evaluation fixture baseline")
+
+
+def _remove_workspace(workspace: Path, run_directory: Path) -> None:
+    if not workspace.exists():
+        return
+    resolved = workspace.resolve()
+    if workspace.name != "workspace" or resolved.parent != run_directory.resolve():
+        raise RuntimeError(f"Refusing to remove unexpected evaluation path: {workspace}")
+
+    def retry_readonly(
+        function: Callable[[str], object],
+        path: str,
+        error: tuple[type[BaseException], BaseException, object],
+    ) -> None:
+        if not isinstance(error[1], PermissionError):
+            raise error[1]
+        os.chmod(path, stat.S_IRWXU)
+        function(path)
+
+    shutil.rmtree(workspace, onerror=retry_readonly)
 
 
 def _copy_agent_artifacts(source: Path | None, target: Path) -> Path | None:
@@ -315,7 +336,7 @@ class EvaluationHarness:
         )
         result_path = write_json(run_directory / "result.json", result.to_dict())
         if not keep_workspace:
-            shutil.rmtree(workspace, ignore_errors=True)
+            _remove_workspace(workspace, run_directory)
         return result, str(result_path.relative_to(evaluation_directory))
 
     def run_manifest(

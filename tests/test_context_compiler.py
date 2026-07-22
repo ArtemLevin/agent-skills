@@ -9,6 +9,20 @@ from agentkit.context_compiler import ContextCompiler
 
 
 class ContextCompilerTests(unittest.TestCase):
+    def test_canonicalizes_project_root_before_relativizing_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "nested").mkdir()
+            target = root / "worker.py"
+            target.write_text("def work():\n    return True\n", encoding="utf-8")
+            compiler = ContextCompiler(
+                root / "nested" / "..",
+                ContextConfig(cache_enabled=False),
+            )
+
+            self.assertEqual(compiler.project_root, root.resolve())
+            self.assertEqual(compiler._candidate_files("worker"), [target])
+
     def test_compiles_bounded_context_and_hits_cache(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
