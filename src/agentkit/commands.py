@@ -38,6 +38,8 @@ def run_command(
     timeout_seconds: int,
     policy: CommandPolicy,
     env: dict[str, str] | None = None,
+    encoding: str | None = None,
+    errors: str | None = None,
 ) -> CommandResult:
     policy.validate(command)
     started = time.monotonic()
@@ -50,6 +52,8 @@ def run_command(
             cwd=cwd,
             env=merged_env,
             text=True,
+            encoding=encoding,
+            errors=errors,
             capture_output=True,
             timeout=timeout_seconds,
             check=False,

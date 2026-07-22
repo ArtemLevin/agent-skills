@@ -73,8 +73,13 @@ class GraphifyBootstrapTests(unittest.TestCase):
                     resolution=self._resolution(executable),
                 )
         command = run.call_args.args[0]
+        kwargs = run.call_args.kwargs
         self.assertEqual(command[0], str(executable))
         self.assertEqual(command[1:], ["install", "--project", "--platform", "agents"])
+        self.assertEqual(kwargs["encoding"], "utf-8")
+        self.assertEqual(kwargs["errors"], "replace")
+        self.assertEqual(kwargs["env"]["PYTHONUTF8"], "1")
+        self.assertEqual(kwargs["env"]["PYTHONIOENCODING"], "utf-8")
         self.assertTrue(payload["installed"])
 
     def test_missing_executable_is_nonfatal_for_init_but_actionable(self) -> None:
@@ -110,7 +115,7 @@ class GraphifyBootstrapTests(unittest.TestCase):
                     ),
                 )
 
-    def test_graph_client_uses_absolute_executable(self) -> None:
+    def test_graph_client_uses_absolute_executable_and_code_only_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             executable = root / "tool env" / "graphify.exe"
@@ -131,8 +136,40 @@ class GraphifyBootstrapTests(unittest.TestCase):
                 )
                 client.update()
         command = run.call_args.args[0]
+        kwargs = run.call_args.kwargs
         self.assertEqual(command[0], str(executable))
+        self.assertIn("--code-only", command)
         self.assertIn("--no-viz", command)
+        self.assertEqual(kwargs["encoding"], "utf-8")
+        self.assertEqual(kwargs["errors"], "replace")
+        self.assertEqual(kwargs["env"]["PYTHONUTF8"], "1")
+        self.assertEqual(kwargs["env"]["PYTHONIOENCODING"], "utf-8")
+
+    def test_graph_update_preserves_incremental_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            graph = root / "graphify-out" / "graph.json"
+            graph.parent.mkdir(parents=True)
+            graph.write_text("{}", encoding="utf-8")
+            executable = root / "graphify.exe"
+            policy = CommandPolicy(["graphify"], [])
+            result = CommandResult(
+                command=[],
+                returncode=0,
+                stdout="ok",
+                stderr="",
+                duration_seconds=0.1,
+            )
+            with patch("agentkit.graphify.run_command", return_value=result) as run:
+                GraphifyClient(
+                    root,
+                    GraphifyConfig(),
+                    policy,
+                    resolution=self._resolution(executable),
+                ).update()
+        command = run.call_args.args[0]
+        self.assertIn("--update", command)
+        self.assertIn("--code-only", command)
 
     def test_doctor_reports_tool_environment_and_project_skill(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -158,7 +195,10 @@ class GraphifyBootstrapTests(unittest.TestCase):
             output = io.StringIO()
             payload = {"attempted": True, "installed": True, "platform": "agents"}
             with (
-                patch("agentkit.entrypoint.install_graphify_project_skill", return_value=payload) as install,
+                patch(
+                    "agentkit.entrypoint.install_graphify_project_skill",
+                    return_value=payload,
+                ) as install,
                 redirect_stdout(output),
             ):
                 code = entrypoint_main(

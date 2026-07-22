@@ -2,6 +2,13 @@
 
 All notable AgentKit changes are documented here. The project follows semantic versioning from 1.0 onward.
 
+## 1.0.2 — 2026-07-22
+
+- Run AgentKit-managed Graphify updates in deterministic local `--code-only` mode so projects containing documentation do not require an LLM API key or trigger provider usage.
+- Preserve incremental `--update`, directed graphs, and local graph queries over the resulting `graph.json`.
+- Decode Graphify subprocess output explicitly as UTF-8 and set Python UTF-8 environment flags to preserve Cyrillic Windows paths.
+- Add regression coverage for keyless code-only graph creation, incremental updates, absolute executables, and UTF-8 subprocess settings.
+
 ## 1.0.1 — 2026-07-22
 
 - Resolve Graphify from AgentKit's own Python or `uv tool` environment when the dependency executable is not exported to the user `PATH`.

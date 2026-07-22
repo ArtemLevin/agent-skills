@@ -2,7 +2,7 @@
 
 ## Graphify package exists but command is unavailable
 
-AgentKit 1.0.1 resolves Graphify from both the user `PATH` and AgentKit's own Python or `uv tool` environment. Run:
+AgentKit 1.0.1+ resolves Graphify from both the user `PATH` and AgentKit's own Python or `uv tool` environment. Run:
 
 ```bash
 agentkit doctor
@@ -12,6 +12,21 @@ agentkit graph install --platform agents
 The `graphify` section reports `package_installed`, `executable_found`, `executable_source`, `project_skill_installed`, and an actionable repair command. A normal `uv tool install "git+https://github.com/ArtemLevin/agent-skills.git"` no longer requires `--with-executables-from graphifyy` for AgentKit's internal operations.
 
 If explicit repair still reports that the executable cannot be resolved, reinstall AgentKit and inspect `agentkit version --verbose`. `agentkit init --skip-graphify-install` remains available for intentionally minimal or diagnostic installations.
+
+## Graphify asks for an LLM API key
+
+AgentKit 1.0.2+ invokes Graphify with `--code-only` for managed graph updates. This builds the code graph locally through deterministic extraction, skips documentation/media semantic extraction, and does not require an LLM API key.
+
+After upgrading, run:
+
+```bash
+agentkit graph update
+agentkit graph query "Where is lesson persistence implemented?"
+```
+
+For a one-off semantic graph that includes documentation, invoke Graphify directly and explicitly choose its backend or provide the backend's credentials. This is outside the default AgentKit workflow so an ordinary graph refresh cannot silently trigger paid provider usage.
+
+On Windows, AgentKit requests UTF-8 subprocess output and sets `PYTHONUTF8=1` plus `PYTHONIOENCODING=utf-8`; paths containing Cyrillic characters should therefore remain readable in JSON output.
 
 ## Incomplete run
 

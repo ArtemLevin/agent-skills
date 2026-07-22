@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -48,6 +49,13 @@ def find_graphify_project_skill(project_root: Path) -> Path | None:
     return None
 
 
+def _graphify_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.setdefault("PYTHONUTF8", "1")
+    environment.setdefault("PYTHONIOENCODING", "utf-8")
+    return environment
+
+
 def install_graphify_project_skill(
     project_root: Path,
     *,
@@ -84,7 +92,10 @@ def install_graphify_project_skill(
             platform,
         ],
         cwd=project_root,
+        env=_graphify_environment(),
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=False,
         stdin=subprocess.DEVNULL,
@@ -140,6 +151,12 @@ class GraphifyClient:
             cwd=self.project_root,
             timeout_seconds=self.timeout_seconds,
             policy=self.policy,
+            env={
+                "PYTHONUTF8": "1",
+                "PYTHONIOENCODING": "utf-8",
+            },
+            encoding="utf-8",
+            errors="replace",
         )
         if self.observer is not None:
             self.observer(phase, result)
@@ -154,7 +171,7 @@ class GraphifyClient:
             command.append("--update")
         if self.config.directed:
             command.append("--directed")
-        command.append("--no-viz")
+        command.extend(["--code-only", "--no-viz"])
         return self._execute(command, phase="graph_update")
 
     def query(self, task: str) -> CommandResult | None:
