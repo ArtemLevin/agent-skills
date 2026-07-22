@@ -2,6 +2,12 @@
 
 AgentKit provides orchestration-level guardrails around a coding-agent CLI. It does not replace the agent's native sandbox.
 
+## Recovery and diagnostics
+
+AgentKit 1.0 records an explicit mutation boundary. An interrupted implementation or targeted-fix command is never replayed automatically, and partial working-tree changes are not reset or hidden. Lifecycle metadata is written atomically.
+
+Diagnostic bundles use an allowlist, reject symlinks, bound included text, and redact credential-shaped fields and values. They exclude source files, diffs, prompts, and raw provider output by default. Corrupted caches are moved to quarantine rather than deleted, and dirty temporary worktrees are never force-removed.
+
 ## Trust boundaries
 
 1. **User task** — untrusted instructions that may be ambiguous or destructive.

@@ -8,14 +8,18 @@ from pathlib import Path
 from .commands import CommandPolicy
 from .config import configured_project_root, load_config
 from .context_cache import ContextCache
-from .context_compiler import ContextCompiler, PHASES
+from .context_compiler import PHASES, ContextCompiler
 from .doctor import doctor
+from .exit_codes import ExitCode
 from .graphify import GraphifyClient
 from .init_project import initialize_project
+from .installation import apply_migration, migration_report
 from .models import RunMode
+from .operations import create_diagnostics_bundle, self_test, version_payload
 from .project_profile import load_or_create_profile
 from .reporting import aggregate_report, load_budget_status, load_usage
 from .runner import AgentKitError, AgentKitRunner, RunRequest
+from .state import RunState
 from .triage import classify_task
 from .verification import run_checks
 
@@ -56,6 +60,11 @@ def _add_task_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--skip-graph", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--resume",
+        metavar="RUN_ID",
+        help="Resume a run that has not crossed the mutation boundary",
+    )
 
 
 def _add_context_task_arguments(
@@ -216,6 +225,18 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--limit", type=int, default=20)
     sub.add_parser("models", help="Inspect phase-aware model routes")
     sub.add_parser("providers", help="Inspect configured model providers")
+
+    migrate = sub.add_parser("migrate", help="Check or apply a safe AgentKit project upgrade")
+    migrate_sub = migrate.add_subparsers(dest="migrate_command", required=True)
+    migrate_sub.add_parser("check", help="Report upgrade actions without changing files")
+    migrate_sub.add_parser("apply", help="Apply safe updates and preserve customizations")
+
+    sub.add_parser("self-test", help="Verify local AgentKit readiness without paid calls")
+    diagnostics = sub.add_parser("diagnostics", help="Create redacted diagnostic artifacts")
+    diagnostics_sub = diagnostics.add_subparsers(dest="diagnostics_command", required=True)
+    diagnostics_sub.add_parser("bundle", help="Create a bounded redacted ZIP bundle")
+    version = sub.add_parser("version", help="Show AgentKit version and compatibility data")
+    version.add_argument("--verbose", action="store_true")
     return parser
 
 
@@ -247,7 +268,30 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                 )
             )
-            return 0
+            return ExitCode.SUCCESS
+        if args.command == "migrate":
+            payload = (
+                migration_report(project_root)
+                if args.migrate_command == "check"
+                else apply_migration(project_root)
+            )
+            _print(payload)
+            return (
+                ExitCode.SUCCESS
+                if not payload.get("blocking_conflicts")
+                else ExitCode.NOT_READY
+            )
+        if args.command == "self-test":
+            payload = self_test(project_root)
+            _print(payload)
+            return ExitCode.SUCCESS if payload["ready"] else ExitCode.NOT_READY
+        if args.command == "diagnostics":
+            _print(create_diagnostics_bundle(project_root))
+            return ExitCode.SUCCESS
+        if args.command == "version":
+            payload = version_payload(project_root)
+            _print(payload if args.verbose else {"agentkit_version": payload["agentkit_version"]})
+            return ExitCode.SUCCESS
         if args.command == "doctor":
             payload = doctor(project_root)
             _print(payload)
@@ -261,8 +305,11 @@ def main(argv: list[str] | None = None) -> int:
             latest = project_root / ".agent" / "state" / "latest"
             if not latest.is_file():
                 _print({"status": "no_runs"})
-                return 1
+                return ExitCode.EMPTY
             run_id = latest.read_text(encoding="utf-8").strip()
+            lifecycle = (
+                project_root / ".agent" / "state" / "runs" / run_id / "run.json"
+            )
             completion = (
                 project_root
                 / ".agent"
@@ -276,8 +323,20 @@ def main(argv: list[str] | None = None) -> int:
                 if completion.is_file()
                 else {"status": "incomplete"}
             )
-            _print({"run_id": run_id, "completion": payload})
-            return 0
+            lifecycle_payload = (
+                json.loads(lifecycle.read_text(encoding="utf-8"))
+                if lifecycle.is_file()
+                else {"status": "legacy"}
+            )
+            _print(
+                {
+                    "run_id": run_id,
+                    "lifecycle": lifecycle_payload,
+                    "completion": payload,
+                    "incomplete_runs": RunState.incomplete_runs(project_root),
+                }
+            )
+            return ExitCode.SUCCESS
         if args.command == "usage":
             _print(load_usage(project_root, args.run_id))
             return 0
@@ -411,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
                 _print({"status": "unavailable"})
                 return 2
             _print(result.to_dict())
-            return 0 if result.passed else result.returncode or 2
+            return ExitCode.SUCCESS if result.passed else ExitCode.ERROR
         if args.command in {"run", "plan"}:
             if args.agent and args.route:
                 raise AgentKitError("Use either --agent or --route, not both")
@@ -424,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
                 approve_deep=args.approve_deep,
                 skip_graph=args.skip_graph,
                 route_override=args.route,
+                resume_run_id=args.resume,
             )
             outcome = AgentKitRunner(
                 project_root,
@@ -440,6 +500,17 @@ def main(argv: list[str] | None = None) -> int:
                         else None
                     ),
                 }
+            )
+            RunState.finish_existing(
+                project_root,
+                outcome.run_id,
+                status=(
+                    "completed"
+                    if outcome.exit_code in {ExitCode.SUCCESS, ExitCode.APPROVAL_REQUIRED}
+                    else "failed"
+                ),
+                phase=outcome.stage.value,
+                message=outcome.message,
             )
             return outcome.exit_code
     except (

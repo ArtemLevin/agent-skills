@@ -61,7 +61,10 @@ class CompiledContext:
 
 class ContextCompiler:
     def __init__(self, project_root: Path, config: ContextConfig) -> None:
-        self.project_root = project_root
+        # Windows runners may expose the same temporary directory through both
+        # an 8.3 short name and its canonical long name. Normalize once before
+        # comparing candidate paths so pathlib does not treat them as unrelated.
+        self.project_root = project_root.resolve()
         self.config = config
         cache_path = self._resolve(config.cache_path)
         self.cache = ContextCache(cache_path) if config.cache_enabled else None

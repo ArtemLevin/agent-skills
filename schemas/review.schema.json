@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/schemas/review.schema.json",
+  "x-agentkit-schema-version": 1,
   "title": "Adversarial review result",
   "type": "object",
   "additionalProperties": false,

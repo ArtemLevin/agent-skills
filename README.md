@@ -108,6 +108,7 @@ A clean tree is required by default so the runner can attribute changes to one t
 
 ```bash
 agentkit doctor
+agentkit self-test
 agentkit graph update
 ```
 
@@ -171,6 +172,10 @@ agentkit models doctor
 agentkit models list
 agentkit models route --task "question"
 agentkit providers test openai
+agentkit migrate check
+agentkit self-test
+agentkit diagnostics bundle
+agentkit version --verbose
 ```
 
 Make aliases:
@@ -182,6 +187,9 @@ make ai-graph
 make ai-check
 make ai-doctor
 make ai-status
+make ai-upgrade-check
+make ai-self-test
+make ai-diagnostics
 ```
 
 ## Configuration
@@ -318,11 +326,17 @@ make validate
 
 ## Status
 
-The CLI is a pre-1.0 supervised-autopilot release: autonomous context gathering, implementation, checking, and review, followed by a human decision. OpenAI model routing is opt-in and the CLI-only path remains the default. Autonomous commits, merges, and deployments remain outside the runtime contract.
+AgentKit 1.0 is a stable supervised-autopilot release: autonomous context gathering, implementation, checking, and review, followed by a human decision. OpenAI model routing is opt-in and the CLI-only path remains the default. Autonomous commits, merges, and deployments remain outside the runtime contract.
 
 ## Documentation
 
 - [Beginner guide](docs/agentkit-guide.md)
+- [Installation](docs/installation.md)
+- [Upgrade and rollback](docs/upgrade-guide.md)
+- [CLI reference](docs/cli-reference.md)
+- [Configuration reference](docs/config-reference.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [AgentKit 1.0 contracts](docs/public-contracts-1.0.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/agentkit-security.md)
 - [OpenAI model routing](docs/model-routing-openai.md)

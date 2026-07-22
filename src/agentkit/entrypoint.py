@@ -7,6 +7,7 @@ from . import cli as core_cli
 from .config import configured_project_root
 from .evals.cli import efficiency_main, eval_main, quality_history_main
 from .evals.resources import ensure_evaluation_files
+from .installation import apply_migration, installation_manifest, record_installation_manifest
 from .model_runtime import ModelRoutingRunner
 from .model_runtime.cli import models_main, providers_main
 from .model_runtime.resources import ensure_model_runtime_files
@@ -20,6 +21,7 @@ from .quality.resources_hotspot import ensure_hotspot_context_files
 from .quality.resources_routing import ensure_quality_routing_files
 from .quality.routing_cli import ROUTING_COMMANDS
 from .quality.routing_cli import main as quality_routing_main
+from .release_resources import ensure_release_files
 
 _EVALUATION_QUALITY_COMMANDS = {"trend", "regressions", "report"}
 
@@ -96,9 +98,13 @@ def main(argv: list[str] | None = None) -> int:
         if command == "hotspot-context":
             return hotspot_context_main(_subcommand_argv(args, position))
         core_cli.AgentKitRunner = ModelRoutingRunner
+        root = configured_project_root(_project_root_arg(args))
+        existing_agent_dir = command == "init" and (root / ".agent").is_dir()
+        existing_manifest = (
+            installation_manifest(root) if existing_agent_dir else None
+        )
         result = core_cli.main(args)
         if command == "init" and result == 0:
-            root = configured_project_root(_project_root_arg(args))
             ensure_quality_project_files(root)
             ensure_quality_gate_project_files(root)
             ensure_hotspot_context_files(root)
@@ -106,6 +112,17 @@ def main(argv: list[str] | None = None) -> int:
             ensure_quality_ci_files(root)
             ensure_evaluation_files(root)
             ensure_model_runtime_files(root)
+            ensure_release_files(root)
+            if existing_agent_dir:
+                apply_migration(root)
+            else:
+                record_installation_manifest(root)
+            if existing_manifest is not None:
+                record_installation_manifest(
+                    root,
+                    overwrite=True,
+                    previous_version=str(existing_manifest.get("agentkit_version", "")),
+                )
         return result
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(

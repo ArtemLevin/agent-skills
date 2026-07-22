@@ -42,6 +42,7 @@ class RunRequest:
     approve_deep: bool = False
     skip_graph: bool = False
     route_override: str | None = None
+    resume_run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -171,12 +172,17 @@ class AgentKitRunner:
         ledger: UsageLedger,
         controller: BudgetController,
         provider: str,
+        mutating: bool = False,
     ) -> tuple[CommandResult | None, BudgetStatus, str]:
         allowed, reason = controller.can_start_agent_call(ledger, phase)
         if not allowed:
             status = self._persist_telemetry(state, ledger, controller)
             return None, status, reason
+        if mutating:
+            state.mark_mutation_started(phase)
         result = adapter.execute(prompt, phase=phase, cwd=self.project_root)
+        if mutating:
+            state.mark_mutation_completed(diff_text(self.project_root))
         ledger.record(phase=phase, kind="agent", result=result, provider=provider)
         status = self._persist_telemetry(state, ledger, controller)
         reason = "; ".join(status.hard_limits_exceeded)
@@ -227,7 +233,11 @@ class AgentKitRunner:
                 "workflow.require_clean_tree=false after reviewing the risk."
             )
 
-        state = RunState(self.project_root)
+        state = RunState(
+            self.project_root,
+            run_id=request.resume_run_id,
+            resume=bool(request.resume_run_id),
+        )
         provider = self._ledger_provider(request)
         ledger = UsageLedger(run_id=state.run_id, provider=provider)
         controller = BudgetController(self.config.budget)
@@ -237,6 +247,7 @@ class AgentKitRunner:
         baseline_head = current_head(self.project_root)
         triage = classify_task(request.task, request.mode)
         state.write_json("triage.json", triage.to_dict())
+        state.checkpoint("triage", triage.to_dict())
 
         graph = GraphContext(False, False, "", "", "Graph step skipped")
         if not request.skip_graph:
@@ -247,6 +258,7 @@ class AgentKitRunner:
                 observer=observer,
             ).build_context(request.task)
         state.write_json("graph.json", graph.to_dict())
+        state.checkpoint("graph_context", graph.to_dict())
 
         packet = self._task_packet(request, triage, graph, baseline_head)
         state.write_json("task-packet.json", packet)
@@ -299,6 +311,7 @@ class AgentKitRunner:
             ledger=ledger,
             controller=controller,
             provider=phase_provider,
+            mutating=not request.plan_only,
         )
         if implementation is None or budget_status.hard_limits_exceeded:
             return self._budget_outcome(
@@ -341,6 +354,7 @@ class AgentKitRunner:
             observer=observer,
         )
         state.write_json("verification.json", [item.to_dict() for item in checks])
+        state.checkpoint("verification", [item.to_dict() for item in checks])
         checks_passed = bool(checks) and all(item.passed for item in checks)
 
         review = ReviewReport(verdict="skipped")
@@ -365,6 +379,7 @@ class AgentKitRunner:
                 "approved",
                 "approved_with_non_blocking_findings",
             } and not review.blocking_findings
+            state.checkpoint("review", review.to_dict())
 
         fixes_used = 0
         while review.blocking_findings and fixes_used < self.config.workflow.max_fix_iterations:
@@ -382,6 +397,7 @@ class AgentKitRunner:
                 ledger=ledger,
                 controller=controller,
                 provider=fix_provider,
+                mutating=True,
             )
             if correction is None or budget_status.hard_limits_exceeded:
                 return self._budget_outcome(

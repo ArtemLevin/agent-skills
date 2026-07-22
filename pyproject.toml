@@ -1,14 +1,28 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-skills-engineering-kit"
-version = "0.11.0"
+version = "1.0.0"
 description = "OpenAI-routed supervised autopilot with phase-aware execution and exact usage"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
+authors = [{ name = "Artem Levin" }]
+keywords = ["agent", "openai", "software-engineering", "automation"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
 dependencies = [
   "graphifyy>=0.9.23,<1.0"
 ]
@@ -23,12 +37,61 @@ eval = [
 openai = [
   "openai>=2,<3"
 ]
+all = [
+  "strictacode>=0.0.5,<0.1",
+  "PyYAML>=6,<7",
+  "openai>=2,<3",
+]
+dev = [
+  "build>=1,<2",
+  "jsonschema>=4,<5",
+  "pip-audit>=2,<3",
+  "ruff>=0.9,<1",
+  "twine>=6,<7",
+]
+
+[project.urls]
+Homepage = "https://github.com/ArtemLevin/agent-skills"
+Repository = "https://github.com/ArtemLevin/agent-skills"
+Issues = "https://github.com/ArtemLevin/agent-skills/issues"
 
 [project.scripts]
 agentkit = "agentkit.entrypoint:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.data-files]
+"share/agentkit" = ["AGENT.md"]
+"share/agentkit/policies" = ["policies/*.md"]
+"share/agentkit/schemas" = ["schemas/*.json"]
+"share/agentkit/templates" = ["templates/*.md"]
+"share/agentkit/skills/adversarial-review" = ["skills/adversarial-review/SKILL.md"]
+"share/agentkit/skills/architecture-guard" = ["skills/architecture-guard/SKILL.md"]
+"share/agentkit/skills/autopilot-orchestration" = ["skills/autopilot-orchestration/SKILL.md"]
+"share/agentkit/skills/change-planner" = ["skills/change-planner/SKILL.md"]
+"share/agentkit/skills/concurrency-review" = ["skills/concurrency-review/SKILL.md"]
+"share/agentkit/skills/context-compiler" = ["skills/context-compiler/SKILL.md"]
+"share/agentkit/skills/database-review" = ["skills/database-review/SKILL.md"]
+"share/agentkit/skills/delivery-summary" = ["skills/delivery-summary/SKILL.md"]
+"share/agentkit/skills/engineering-balance" = ["skills/engineering-balance/SKILL.md"]
+"share/agentkit/skills/evaluation-harness" = ["skills/evaluation-harness/SKILL.md"]
+"share/agentkit/skills/graph-context" = ["skills/graph-context/SKILL.md"]
+"share/agentkit/skills/hotspot-aware-context" = ["skills/hotspot-aware-context/SKILL.md"]
+"share/agentkit/skills/implementation" = ["skills/implementation/SKILL.md"]
+"share/agentkit/skills/intent-documentation" = ["skills/intent-documentation/SKILL.md"]
+"share/agentkit/skills/model-routing" = ["skills/model-routing/SKILL.md"]
+"share/agentkit/skills/quality-aware-routing" = ["skills/quality-aware-routing/SKILL.md"]
+"share/agentkit/skills/quality-ci" = ["skills/quality-ci/SKILL.md"]
+"share/agentkit/skills/quality-diagnostics" = ["skills/quality-diagnostics/SKILL.md"]
+"share/agentkit/skills/quality-regression-gate" = ["skills/quality-regression-gate/SKILL.md"]
+"share/agentkit/skills/repository-context" = ["skills/repository-context/SKILL.md"]
+"share/agentkit/skills/requirements-contract" = ["skills/requirements-contract/SKILL.md"]
+"share/agentkit/skills/risk-based-testing" = ["skills/risk-based-testing/SKILL.md"]
+"share/agentkit/skills/security-review" = ["skills/security-review/SKILL.md"]
+"share/agentkit/skills/task-triage" = ["skills/task-triage/SKILL.md"]
+"share/agentkit/skills/token-telemetry" = ["skills/token-telemetry/SKILL.md"]
+"share/agentkit/skills/verification-router" = ["skills/verification-router/SKILL.md"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

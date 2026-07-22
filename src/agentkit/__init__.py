@@ -1,4 +1,5 @@
+from .contracts import PACKAGE_VERSION
 from .models import RunMode
 
 __all__ = ["RunMode"]
-__version__ = "0.11.0"
+__version__ = PACKAGE_VERSION

@@ -9,22 +9,85 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  platform:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip "setuptools>=77" wheel
+      - name: Install package without optional providers
+        run: python -m pip install -e . --no-deps --no-build-isolation
+      - name: Validate skills and release contracts
+        run: |
+          python scripts/validate_skills.py
+          python scripts/validate_release.py
+      - name: Run unit, contract, integration, and golden tests
+        run: python -m unittest discover -s tests -v
+      - name: Run deterministic evaluation smoke gate
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: python -m unittest discover -s tests -p test_eval_ci_smoke.py -v
+      - name: Compile Python sources
+        run: python -m compileall -q src scripts tests
+      - name: Verify CLI entrypoint
+        run: |
+          agentkit --help
+          agentkit version --verbose
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install release tooling
+        run: python -m pip install --upgrade pip build jsonschema "setuptools>=77" twine wheel
+      - name: Verify reproducible sdist and wheel
+        run: python scripts/verify_reproducible_build.py
+      - name: Build distribution
+        run: |
+          export SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          python -m build --no-isolation
+          python scripts/normalize_sdist.py dist/*.tar.gz
+      - name: Check package metadata
+        run: python -m twine check dist/*
+      - name: Smoke installed wheel in a path with spaces
+        run: |
+          python -m venv "/tmp/agentkit release smoke"
+          "/tmp/agentkit release smoke/bin/python" -m pip install dist/*.whl
+          mkdir -p "/tmp/agentkit project with spaces"
+          git -C "/tmp/agentkit project with spaces" init -q
+          "/tmp/agentkit release smoke/bin/agentkit" --project-root "/tmp/agentkit project with spaces" init --skip-graphify-install
+          "/tmp/agentkit release smoke/bin/agentkit" --project-root "/tmp/agentkit project with spaces" self-test
+      - name: Smoke source distribution without optional providers
+        run: |
+          python -m venv "/tmp/agentkit sdist smoke"
+          "/tmp/agentkit sdist smoke/bin/python" -m pip install "setuptools>=77" wheel
+          "/tmp/agentkit sdist smoke/bin/python" -m pip install --no-deps --no-build-isolation dist/*.tar.gz
+          "/tmp/agentkit sdist smoke/bin/agentkit" version --verbose
+
+  security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip "setuptools>=68" wheel
-      - name: Install package without runtime dependencies
-        run: python -m pip install -e . --no-deps --no-build-isolation
-      - name: Validate skill structure
-        run: python scripts/validate_skills.py
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
-      - name: Compile Python sources
-        run: python -m compileall -q src scripts tests
-      - name: Verify CLI entrypoint
-        run: agentkit --help
+      - name: Scan repository for secret material
+        run: python scripts/scan_secrets.py
+      - name: Audit release dependencies
+        run: |
+          python -m pip install pip-audit
+          python -m pip install .
+          python -m pip_audit

@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/schemas/task-packet.schema.json",
+  "x-agentkit-schema-version": 1,
   "title": "AgentKit task packet",
   "type": "object",
   "required": ["task", "mode", "risk_reasons", "selected_skills", "graph", "git_head", "limits"],
