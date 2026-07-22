@@ -21,6 +21,7 @@ _GRAPHIFYIGNORE_BLOCK = """# BEGIN AGENTKIT
 .agents/
 graphify-out/
 # END AGENTKIT"""
+_GRAPHIFY_REBUILD_MARKER = Path(".agent/state/graphify-rebuild-required")
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,17 @@ def find_graphify_project_skill(project_root: Path) -> Path | None:
     return None
 
 
+def graphify_rebuild_marker(project_root: Path) -> Path:
+    return project_root / _GRAPHIFY_REBUILD_MARKER
+
+
+def mark_graphify_rebuild_required(project_root: Path) -> Path:
+    marker = graphify_rebuild_marker(project_root)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("ignore-policy-changed\n", encoding="utf-8")
+    return marker
+
+
 def ensure_graphify_ignore(project_root: Path) -> bool:
     """Exclude AgentKit's generated control plane from the application graph."""
 
@@ -76,6 +88,7 @@ def ensure_graphify_ignore(project_root: Path) -> bool:
     if updated == existing:
         return False
     path.write_text(updated, encoding="utf-8", newline="\n")
+    mark_graphify_rebuild_required(project_root)
     return True
 
 
@@ -195,15 +208,20 @@ class GraphifyClient:
     def update(self) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
             return None
-        ignore_changed = ensure_graphify_ignore(self.project_root)
+        ensure_graphify_ignore(self.project_root)
+        marker = graphify_rebuild_marker(self.project_root)
+        rebuild_required = marker.is_file()
         graph_exists = (self.project_root / "graphify-out" / "graph.json").is_file()
         command = [self.executable, "."]
-        if graph_exists and not ignore_changed:
+        if graph_exists and not rebuild_required:
             command.append("--update")
         if self.config.directed:
             command.append("--directed")
         command.extend(["--code-only", "--no-viz"])
-        return self._execute(command, phase="graph_update")
+        result = self._execute(command, phase="graph_update")
+        if result.passed and rebuild_required:
+            marker.unlink(missing_ok=True)
+        return result
 
     def query(self, task: str) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
