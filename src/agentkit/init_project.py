@@ -17,8 +17,13 @@ TASK ?=
 TASK_FILE ?=
 RUN_ID ?=
 REPORT_LIMIT ?= 20
+CONTEXT_PHASE ?= implementation
+CONTEXT_OUTPUT ?=
+CACHE_LIMIT ?= 20
+CACHE_NAMESPACE ?=
+CACHE_MAX_AGE_DAYS ?= 30
 
-.PHONY: ai ai-plan ai-graph ai-check ai-doctor ai-status ai-usage ai-budget ai-report ai-telemetry
+.PHONY: ai ai-plan ai-graph ai-check ai-doctor ai-status ai-usage ai-budget ai-report ai-telemetry ai-context ai-profile ai-profile-refresh ai-cache-stats ai-cache-list ai-cache-prune ai-cache-clear ai-context-maintain
 
 ai:
 	$(AGENTKIT) run --agent "$(AGENT)" --mode "$(MODE)" $(if $(TASK),--task "$(TASK)",) $(if $(TASK_FILE),--task-file "$(TASK_FILE)",)
@@ -48,10 +53,33 @@ ai-report:
 	$(AGENTKIT) report --limit "$(REPORT_LIMIT)"
 
 ai-telemetry: ai-usage ai-budget
+
+ai-context:
+	$(AGENTKIT) context compile --phase "$(CONTEXT_PHASE)" --mode "$(MODE)" $(if $(TASK),--task "$(TASK)",) $(if $(TASK_FILE),--task-file "$(TASK_FILE)",) $(if $(CONTEXT_OUTPUT),--output "$(CONTEXT_OUTPUT)",)
+
+ai-profile:
+	$(AGENTKIT) profile show
+
+ai-profile-refresh:
+	$(AGENTKIT) profile refresh
+
+ai-cache-stats:
+	$(AGENTKIT) cache stats
+
+ai-cache-list:
+	$(AGENTKIT) cache list --limit "$(CACHE_LIMIT)" $(if $(CACHE_NAMESPACE),--namespace "$(CACHE_NAMESPACE)",)
+
+ai-cache-prune:
+	$(AGENTKIT) cache prune --max-age-days "$(CACHE_MAX_AGE_DAYS)"
+
+ai-cache-clear:
+	$(AGENTKIT) cache clear --yes
+
+ai-context-maintain: ai-profile-refresh ai-cache-prune ai-cache-stats
 """
 
 _INCLUDE_BLOCK = """\n# BEGIN AGENTKIT\n-include .agent/Makefile.agent\n# END AGENTKIT\n"""
-_GITIGNORE_BLOCK = """\n# BEGIN AGENTKIT\ngraphify-out/\n.agent/state/\n# END AGENTKIT\n"""
+_GITIGNORE_BLOCK = """\n# BEGIN AGENTKIT\ngraphify-out/\n.agent/state/\n.agent/cache/\n.agent/project-profile.json\n# END AGENTKIT\n"""
 
 
 def _source_kit_root() -> Path | None:
@@ -62,7 +90,10 @@ def _source_kit_root() -> Path | None:
     module_path = Path(__file__).resolve()
     candidates.extend(module_path.parents)
     for candidate in candidates:
-        if (candidate / "AGENT.md").is_file() and (candidate / "skills").is_dir():
+        if (
+            (candidate / "AGENT.md").is_file()
+            and (candidate / "skills").is_dir()
+        ):
             return candidate
     return None
 
@@ -76,7 +107,10 @@ def _copy_full_kit(source: Path, target: Path) -> None:
 
 
 def _write_builtin_kit(target: Path) -> None:
-    (target / "AGENT.md").write_text(BUILTIN_AGENT_MD, encoding="utf-8")
+    (target / "AGENT.md").write_text(
+        BUILTIN_AGENT_MD,
+        encoding="utf-8",
+    )
     for name in CORE_SKILLS:
         path = target / "skills" / name / "SKILL.md"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,8 +144,16 @@ def initialize_project(
     makefile_agent = agent_dir / "Makefile.agent"
     if force or not makefile_agent.exists():
         makefile_agent.write_text(MAKEFILE_AGENT, encoding="utf-8")
-    _append_once(project_root / "Makefile", _INCLUDE_BLOCK, "# BEGIN AGENTKIT")
-    _append_once(project_root / ".gitignore", _GITIGNORE_BLOCK, "# BEGIN AGENTKIT")
+    _append_once(
+        project_root / "Makefile",
+        _INCLUDE_BLOCK,
+        "# BEGIN AGENTKIT",
+    )
+    _append_once(
+        project_root / ".gitignore",
+        _GITIGNORE_BLOCK,
+        "# BEGIN AGENTKIT",
+    )
 
     graphify_install: dict[str, object]
     if install_graphify_skill and shutil.which("graphify"):
@@ -134,7 +176,11 @@ def initialize_project(
         graphify_install = {
             "attempted": False,
             "platform": platform,
-            "reason": "disabled" if not install_graphify_skill else "graphify executable not found",
+            "reason": (
+                "disabled"
+                if not install_graphify_skill
+                else "graphify executable not found"
+            ),
         }
     return {
         "project_root": str(project_root),

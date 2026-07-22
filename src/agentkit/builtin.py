@@ -7,7 +7,7 @@ Deliver the smallest evidence-backed change that fully satisfies the task.
 
 1. Run task triage before substantial repository work.
 2. Query Graphify first when a graph exists and the task spans code relationships.
-3. Read only the selected skills and minimal source context.
+3. Compile phase-specific context and read only selected skills and minimal source context.
 4. Establish verifiable acceptance criteria.
 5. Keep the diff focused and preserve unrelated changes.
 6. Select tests by regression risk, not coverage percentage.
@@ -64,6 +64,10 @@ CORE_SKILLS = {
         "Use to obtain minimal repository context, preferring scoped Graphify queries before broad file reads when a graph is available.",
         "Find relevant symbols, dependencies, tests, and unknowns without reading the whole repository.",
     ),
+    "context-compiler": (
+        "Use to compile phase-specific minimal context, build or inspect the project profile, and reuse valid cached context without rereading unchanged files.",
+        "Produce a bounded context packet for plan, implementation, review, or targeted-fix phases.",
+    ),
     "requirements-contract": (
         "Use when code behavior changes to turn the request into verifiable acceptance criteria, non-goals, and compatibility constraints.",
         "Create a precise contract that prevents scope drift.",
@@ -84,6 +88,10 @@ CORE_SKILLS = {
         "Use after checks to try to disprove correctness and report only evidenced P0 through P3 findings.",
         "Find real defects rather than praise or stylistic preferences.",
     ),
+    "token-telemetry": (
+        "Use to inspect measured token, call, and duration usage, enforce budgets, and identify expensive workflow phases without inventing missing metrics.",
+        "Measure efficiency while preserving correctness and required verification.",
+    ),
     "delivery-summary": (
         "Use at the end of a task to report actual changes, commands executed, results, and residual risks without a verbose diary.",
         "Provide a factual handoff that distinguishes proof from assumption.",
@@ -93,4 +101,8 @@ CORE_SKILLS = {
 
 def render_core_skill(name: str) -> str:
     description, purpose = CORE_SKILLS[name]
-    return _CORE_SKILL_TEMPLATE.format(name=name, description=description, purpose=purpose)
+    return _CORE_SKILL_TEMPLATE.format(
+        name=name,
+        description=description,
+        purpose=purpose,
+    )
