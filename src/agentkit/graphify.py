@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import tempfile
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,8 +23,11 @@ _GRAPHIFYIGNORE_BLOCK = """# BEGIN AGENTKIT
 .agent/
 .agents/
 graphify-out/
+graph.json
 # END AGENTKIT"""
 _GRAPHIFY_REBUILD_MARKER = Path(".agent/state/graphify-rebuild-required")
+_GRAPHIFY_OUTPUT_GRAPH = Path("graphify-out/graph.json")
+_ROOT_GRAPH = Path("graph.json")
 
 
 @dataclass(frozen=True)
@@ -62,6 +68,14 @@ def graphify_rebuild_marker(project_root: Path) -> Path:
     return project_root / _GRAPHIFY_REBUILD_MARKER
 
 
+def graphify_output_graph_path(project_root: Path) -> Path:
+    return project_root / _GRAPHIFY_OUTPUT_GRAPH
+
+
+def root_graph_path(project_root: Path) -> Path:
+    return project_root / _ROOT_GRAPH
+
+
 def mark_graphify_rebuild_required(project_root: Path) -> Path:
     marker = graphify_rebuild_marker(project_root)
     marker.parent.mkdir(parents=True, exist_ok=True)
@@ -70,7 +84,7 @@ def mark_graphify_rebuild_required(project_root: Path) -> Path:
 
 
 def ensure_graphify_ignore(project_root: Path) -> bool:
-    """Exclude AgentKit's generated control plane from the application graph."""
+    """Exclude AgentKit's generated control plane and published snapshot from extraction."""
 
     path = project_root / ".graphifyignore"
     existing = path.read_text(encoding="utf-8") if path.is_file() else ""
@@ -90,6 +104,72 @@ def ensure_graphify_ignore(project_root: Path) -> bool:
     path.write_text(updated, encoding="utf-8", newline="\n")
     mark_graphify_rebuild_required(project_root)
     return True
+
+
+def _replace_with_retries(source: Path, target: Path, *, attempts: int = 5) -> None:
+    for attempt in range(attempts):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt + 1 >= attempts:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
+def publish_root_graph(project_root: Path) -> Path:
+    """Atomically mirror Graphify's canonical graph into the repository root."""
+
+    source = graphify_output_graph_path(project_root)
+    target = root_graph_path(project_root)
+    if not source.is_file():
+        raise FileNotFoundError(f"Graphify output is missing: {source}")
+    if source.stat().st_size == 0:
+        raise ValueError(f"Graphify output is empty: {source}")
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=project_root,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as destination, source.open("rb") as origin:
+            shutil.copyfileobj(origin, destination, length=1024 * 1024)
+            destination.flush()
+            os.fsync(destination.fileno())
+        _replace_with_retries(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
+def _publication_failure(result: CommandResult, error: Exception) -> CommandResult:
+    message = f"AgentKit failed to publish root graph.json: {error}"
+    stderr = "\n".join(part for part in (result.stderr.strip(), message) if part)
+    return CommandResult(
+        command=result.command,
+        returncode=1,
+        stdout=result.stdout,
+        stderr=stderr,
+        duration_seconds=result.duration_seconds,
+        timed_out=result.timed_out,
+        usage=result.usage,
+    )
+
+
+def _published_result(result: CommandResult, target: Path) -> CommandResult:
+    notice = f"[agentkit] published {target.name}"
+    stdout = "\n".join(part for part in (result.stdout.rstrip(), notice) if part)
+    return CommandResult(
+        command=result.command,
+        returncode=result.returncode,
+        stdout=stdout,
+        stderr=result.stderr,
+        duration_seconds=result.duration_seconds,
+        timed_out=result.timed_out,
+        usage=result.usage,
+    )
 
 
 def _graphify_environment() -> dict[str, str]:
@@ -211,7 +291,7 @@ class GraphifyClient:
         ensure_graphify_ignore(self.project_root)
         marker = graphify_rebuild_marker(self.project_root)
         rebuild_required = marker.is_file()
-        graph_exists = (self.project_root / "graphify-out" / "graph.json").is_file()
+        graph_exists = graphify_output_graph_path(self.project_root).is_file()
         command = [self.executable, "."]
         if graph_exists and not rebuild_required:
             command.append("--update")
@@ -219,9 +299,15 @@ class GraphifyClient:
             command.append("--directed")
         command.extend(["--code-only", "--no-viz"])
         result = self._execute(command, phase="graph_update")
-        if result.passed and rebuild_required:
+        if not result.passed:
+            return result
+        try:
+            target = publish_root_graph(self.project_root)
+        except (OSError, ValueError) as error:
+            return _publication_failure(result, error)
+        if rebuild_required:
             marker.unlink(missing_ok=True)
-        return result
+        return _published_result(result, target)
 
     def query(self, task: str) -> CommandResult | None:
         if not self.config.enabled or not self.installed:
