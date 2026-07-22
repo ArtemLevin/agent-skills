@@ -2,6 +2,14 @@
 
 All notable AgentKit changes are documented here. The project follows semantic versioning from 1.0 onward.
 
+## 1.0.1 — 2026-07-22
+
+- Resolve Graphify from AgentKit's own Python or `uv tool` environment when the dependency executable is not exported to the user `PATH`.
+- Automatically run the project-scoped Graphify skill installer during `agentkit init` using the resolved absolute executable.
+- Add the idempotent repair command `agentkit graph install --platform <platform>` and `make ai-graph-install`.
+- Extend `agentkit doctor` with package, executable-source, project-skill, and repair diagnostics while preserving the existing `installed` and `version` fields.
+- Add Windows/Linux regression coverage for hidden dependency executables, paths with spaces and Cyrillic characters, and absolute-command execution.
+
 ## 1.0.0 — 2026-07-22
 
 - Freeze CLI commands, exit codes, Make targets, configuration version, provider phases, artifact schemas, and state layout.
