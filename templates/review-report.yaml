@@ -1,0 +1,14 @@
+verdict: approved
+findings: []
+criteria_checked:
+  - Acceptance criterion 1
+remaining_risks: []
+confidence: high
+
+# Blocking finding example:
+# findings:
+#   - severity: P1
+#     location: src/example.py:42
+#     issue: Concurrent calls can both perform the side effect.
+#     evidence: The read and write are separate operations without a durable constraint.
+#     smallest_fix: Use one conditional state transition in the persistence layer.

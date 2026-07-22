@@ -1,0 +1,57 @@
+request: Prevent duplicate material generation for one lesson.
+
+triage:
+  task_type: bugfix
+  execution_mode: standard
+  risk:
+    level: medium
+    reasons:
+      - Changes durable state transitions.
+      - Worker delivery may be repeated.
+  scope:
+    likely_paths:
+      - src/app/services/materials.py
+      - tests/services/test_materials.py
+    forbidden_paths:
+      - migrations/
+    compatibility_surfaces:
+      - Existing API response schema.
+  required_skills:
+    - repository-context
+    - requirements-contract
+    - change-planner
+    - implementation
+    - verification-router
+    - risk-based-testing
+    - concurrency-review
+    - adversarial-review
+    - delivery-summary
+  optional_skills:
+    - database-review
+  budgets:
+    max_initial_files: 8
+    max_implementation_iterations: 2
+    max_review_iterations: 1
+  assumptions_to_validate:
+    - MaterialService owns generation state transitions.
+
+requirements:
+  goal: Reject a second active generation request for the same lesson.
+  acceptance_criteria:
+    - Only one request can acquire an active reservation.
+    - Completed generation can be restarted explicitly.
+    - Existing API response schema remains unchanged.
+  non_goals:
+    - Redesigning the task queue.
+    - Adding a generic distributed lock framework.
+
+context_ledger:
+  confirmed:
+    - Queue delivery is at-least-once.
+    - The service can run in multiple processes.
+  unknowns:
+    - Whether the database already has a suitable conditional update.
+  rejected_assumptions:
+    - A process-local lock is sufficient.
+  changed_symbols: []
+  executed_checks: []
