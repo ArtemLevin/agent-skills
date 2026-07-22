@@ -38,7 +38,11 @@ def parse_frontmatter(path: Path) -> Skill:
         raise ValueError("missing opening YAML frontmatter delimiter")
 
     try:
-        end = next(index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---")
+        end = next(
+            index
+            for index, line in enumerate(lines[1:], start=1)
+            if line.strip() == "---"
+        )
     except StopIteration as exc:
         raise ValueError("missing closing YAML frontmatter delimiter") from exc
 
@@ -64,9 +68,18 @@ def parse_frontmatter(path: Path) -> Skill:
     )
 
 
-def validate_skill(skill: Skill) -> list[str]:
+def display_path(path: Path, root: Path) -> Path:
+    """Return a stable relative label without assuming the path is under ROOT."""
+    try:
+        return path.relative_to(root)
+    except ValueError:
+        # Unit tests and external callers may validate skills from temporary trees.
+        return path
+
+
+def validate_skill(skill: Skill, root: Path = ROOT) -> list[str]:
     errors: list[str] = []
-    label = skill.path.relative_to(ROOT)
+    label = display_path(skill.path, root)
 
     if not skill.name:
         errors.append(f"{label}: missing frontmatter field 'name'")
@@ -87,7 +100,10 @@ def validate_skill(skill: Skill) -> list[str]:
 
     line_count = len(skill.content.splitlines())
     if line_count > MAX_SKILL_LINES:
-        errors.append(f"{label}: {line_count} lines exceeds {MAX_SKILL_LINES}; move detail to references/")
+        errors.append(
+            f"{label}: {line_count} lines exceeds {MAX_SKILL_LINES}; "
+            "move detail to references/"
+        )
 
     return errors
 
@@ -110,7 +126,7 @@ def validate_repository(root: Path = ROOT) -> list[str]:
             errors.append(f"{path.relative_to(root)}: {exc}")
             continue
 
-        errors.extend(validate_skill(skill))
+        errors.extend(validate_skill(skill, root))
         if skill.name in names:
             errors.append(
                 f"{path.relative_to(root)}: duplicate skill name also used by "
@@ -120,7 +136,9 @@ def validate_repository(root: Path = ROOT) -> list[str]:
             names[skill.name] = path
 
     orphan_dirs = sorted(
-        path.relative_to(root) for path in skills_dir.iterdir() if path.is_dir() and not (path / "SKILL.md").is_file()
+        path.relative_to(root)
+        for path in skills_dir.iterdir()
+        if path.is_dir() and not (path / "SKILL.md").is_file()
     )
     errors.extend(f"{path}: missing SKILL.md" for path in orphan_dirs)
     return errors
