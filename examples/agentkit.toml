@@ -85,6 +85,18 @@ op = 5
 density = 3.0
 new_critical_hotspots = 0
 
+[quality.routing]
+enabled = true
+allow_mode_escalation = true
+require_approval_on_crisis = true
+characterization_complexity = 40
+edge_case_complexity = 30
+high_refactoring_pressure = 60
+high_overengineering_pressure = 60
+high_fan_in = 10
+high_fan_out = 10
+high_centrality = 0.75
+
 [verification]
 commands = [
   ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
