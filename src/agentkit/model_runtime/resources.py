@@ -57,6 +57,7 @@ def _capabilities_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://example.local/schemas/agent-capabilities.schema.json",
+        "x-agentkit-schema-version": 1,
         "title": "Agent execution capabilities",
         "type": "object",
         "additionalProperties": False,

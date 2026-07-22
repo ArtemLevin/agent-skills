@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -188,16 +187,15 @@ class QualityBaselineManager:
             )
         finally:
             remove = self._execute(
-                ["git", "worktree", "remove", "--force", str(worktree)],
+                ["git", "worktree", "remove", str(worktree)],
                 cwd=self.project_root,
                 phase="quality_baseline",
             )
             if not remove.passed:
                 warnings.append(
                     "Temporary quality baseline worktree could not be removed "
-                    f"automatically: {worktree}"
+                    f"safely; inspect it manually: {worktree}"
                 )
-                shutil.rmtree(worktree, ignore_errors=True)
         return BaselineCapture(
             strategy="merge_base",
             result=result,

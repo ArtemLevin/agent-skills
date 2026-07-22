@@ -29,6 +29,8 @@ description: >
 
 ```bash
 python scripts/validate_skills.py
+python scripts/validate_release.py
+python scripts/scan_secrets.py
 python -m unittest discover -s tests
 ```
 

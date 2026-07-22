@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS context_entries (
@@ -57,9 +58,43 @@ class CacheEntry:
 class ContextCache:
     def __init__(self, path: Path) -> None:
         self.path = path
+        self.recovery_warning = ""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
-            connection.executescript(_SCHEMA)
+        try:
+            self._validate_existing()
+            with self._connect() as connection:
+                connection.executescript(_SCHEMA)
+        except sqlite3.DatabaseError as exc:
+            quarantined = self._quarantine()
+            self.recovery_warning = (
+                f"Corrupted context cache was quarantined at {quarantined}: {exc}"
+            )
+            with self._connect() as connection:
+                connection.executescript(_SCHEMA)
+
+    def _validate_existing(self) -> None:
+        if not self.path.is_file() or self.path.stat().st_size == 0:
+            return
+        with sqlite3.connect(self.path, timeout=10) as connection:
+            result = connection.execute("PRAGMA quick_check").fetchone()
+        if not result or str(result[0]).lower() != "ok":
+            raise sqlite3.DatabaseError(
+                f"PRAGMA quick_check returned {result[0] if result else 'no result'}"
+            )
+
+    def _quarantine(self) -> Path:
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        root = self.path.parent / "quarantine" / stamp
+        root.mkdir(parents=True, exist_ok=True)
+        destination = root / self.path.name
+        for source in (
+            self.path,
+            Path(str(self.path) + "-wal"),
+            Path(str(self.path) + "-shm"),
+        ):
+            if source.exists():
+                shutil.move(str(source), root / source.name)
+        return destination
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
@@ -97,7 +132,8 @@ class ContextCache:
             if expires_at is not None and float(expires_at) <= now:
                 return None
             connection.execute(
-                "UPDATE context_entries SET last_accessed_at = ? WHERE namespace = ? AND cache_key = ?",
+                "UPDATE context_entries SET last_accessed_at = ? "
+                "WHERE namespace = ? AND cache_key = ?",
                 (now, namespace, cache_key),
             )
             connection.commit()
@@ -186,6 +222,7 @@ class ContextCache:
             "active_entries": total - expired,
             "namespaces": {str(row["namespace"]): int(row["count"]) for row in rows},
             "size_bytes": self.path.stat().st_size if self.path.exists() else 0,
+            "recovery_warning": self.recovery_warning,
         }
 
     def list_entries(

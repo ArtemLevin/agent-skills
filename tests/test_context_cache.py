@@ -46,6 +46,17 @@ class ContextCacheTests(unittest.TestCase):
             )
             self.assertEqual(cache.clear()["deleted_entries"], 1)
 
+    def test_corrupt_database_is_quarantined_and_recreated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cache.db"
+            path.write_bytes(b"not a sqlite database")
+            cache = ContextCache(path)
+            self.assertIn("quarantined", cache.recovery_warning)
+            self.assertEqual(cache.stats()["entries"], 0)
+            quarantined = list((path.parent / "quarantine").rglob("cache.db"))
+            self.assertEqual(len(quarantined), 1)
+            self.assertEqual(quarantined[0].read_bytes(), b"not a sqlite database")
+
 
 if __name__ == "__main__":
     unittest.main()

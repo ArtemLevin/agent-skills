@@ -2,7 +2,7 @@
 
 **Status:** Active roadmap  
 **Last updated:** 2026-07-22  
-**Current stable baseline:** AgentKit 0.10.0
+**Current stable baseline:** AgentKit 0.11.0
 **Target:** AgentKit 1.0 — measurable, quality-aware, provider-independent supervised autopilot for software engineering
 
 ---
@@ -47,6 +47,7 @@ The following foundation is already merged into `main`.
 | Quality-aware routing | 0.8 | Risk refinement and verification planning | Complete |
 | Quality CI | 0.9 | Merge-base comparison and PR summaries | Complete |
 | Trends and evaluation | 0.10 | Reproducible fixtures, outcome reports, and regressions | Complete |
+| Model routing | 0.11 | Phase-aware OpenAI read-only planning/review and local mutation routing | Complete |
 
 The current workflow is:
 
@@ -72,7 +73,7 @@ The current completion gate evaluates:
 - configured token/call/time budget;
 - configured quality and maintainability regressions.
 
-The remaining pre-1.0 capability gap is measurable phase-aware model selection, addressed by PR 11 on its implementation branch.
+The remaining pre-1.0 work is contract freeze, migration safety, recovery, platform validation, and reproducible release engineering in PR 12.
 
 ---
 
@@ -1466,6 +1467,8 @@ make ai TASK="..." MODEL_ROUTE=standard
 
 **Branch:** `release/agentkit-1.0`  
 **Planned version:** `1.0.0`
+
+**Implementation status:** complete on the PR branch; awaiting cross-platform CI, review, and the manual opt-in OpenAI release evaluation.
 
 ## Goal
 

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from agentkit.config import configured_project_root, load_config
+from agentkit.exit_codes import ExitCode
 from agentkit.models import RunMode
 from agentkit.triage import classify_task
 
@@ -138,4 +139,4 @@ def providers_main(argv: list[str] | None = None) -> int:
             indent=2,
         )
     )
-    return 0 if result.passed else result.returncode or 2
+    return ExitCode.SUCCESS if result.passed else ExitCode.ERROR

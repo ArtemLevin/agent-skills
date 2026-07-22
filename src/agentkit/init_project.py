@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sysconfig
 from pathlib import Path
 
 from .builtin import BUILTIN_AGENT_MD, CORE_SKILLS, render_core_skill
@@ -27,7 +28,7 @@ MODEL_PHASE ?=
 MODEL_PROVIDER ?= openai
 PROVIDER_LIVE ?= 0
 
-.PHONY: ai ai-plan ai-graph ai-check ai-doctor ai-status ai-usage ai-budget ai-report ai-telemetry ai-context ai-profile ai-profile-refresh ai-cache-stats ai-cache-list ai-cache-prune ai-cache-clear ai-context-maintain ai-model-doctor ai-models ai-route ai-provider-test
+.PHONY: ai ai-plan ai-graph ai-check ai-doctor ai-status ai-usage ai-budget ai-report ai-telemetry ai-context ai-profile ai-profile-refresh ai-cache-stats ai-cache-list ai-cache-prune ai-cache-clear ai-context-maintain ai-model-doctor ai-models ai-route ai-provider-test ai-upgrade-check ai-migrate ai-self-test ai-diagnostics ai-release-check
 
 ai:
 	$(AGENTKIT) run $(if $(MODEL_ROUTE),--route "$(MODEL_ROUTE)",$(if $(AGENT),--agent "$(AGENT)",)) --mode "$(MODE)" $(if $(TASK),--task "$(TASK)",) $(if $(TASK_FILE),--task-file "$(TASK_FILE)",)
@@ -92,6 +93,24 @@ ai-route:
 
 ai-provider-test:
 	$(AGENTKIT) providers test "$(MODEL_PROVIDER)" $(if $(filter 1,$(PROVIDER_LIVE)),--live,)
+
+# BEGIN AGENTKIT RELEASE
+.PHONY: ai-upgrade-check ai-migrate ai-self-test ai-diagnostics ai-release-check
+
+ai-upgrade-check:
+	$(AGENTKIT) migrate check
+
+ai-migrate:
+	$(AGENTKIT) migrate apply
+
+ai-self-test:
+	$(AGENTKIT) self-test
+
+ai-diagnostics:
+	$(AGENTKIT) diagnostics bundle
+
+ai-release-check: ai-upgrade-check ai-self-test
+# END AGENTKIT RELEASE
 """
 
 _INCLUDE_BLOCK = """
@@ -105,13 +124,17 @@ graphify-out/
 .agent/state/
 .agent/cache/
 .agent/evals/
+.agent/backups/
+.agent/diagnostics/
+.agent/update-candidates/
+.agent/worktrees/
 .agent/project-profile.json
 # END AGENTKIT
 """
 
 
 def _source_kit_root() -> Path | None:
-    candidates: list[Path] = []
+    candidates: list[Path] = [Path(sysconfig.get_path("data")) / "share" / "agentkit"]
     env = os.environ.get("AGENTKIT_SOURCE")
     if env:
         candidates.append(Path(env).expanduser())
@@ -126,28 +149,49 @@ def _source_kit_root() -> Path | None:
     return None
 
 
-def _copy_full_kit(source: Path, target: Path) -> None:
-    shutil.copy2(source / "AGENT.md", target / "AGENT.md")
+def _copy_file(source: Path, target: Path, *, force: bool) -> None:
+    if source.is_symlink():
+        raise ValueError(f"Refusing to install symlinked AgentKit resource: {source}")
+    if force or not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def _copy_full_kit(source: Path, target: Path, *, force: bool = False) -> None:
+    _copy_file(source / "AGENT.md", target / "AGENT.md", force=force)
     for directory in ("skills", "policies", "schemas", "templates"):
         src = source / directory
         if src.is_dir():
-            shutil.copytree(src, target / directory, dirs_exist_ok=True)
+            for path in src.rglob("*"):
+                if path.is_file() and not path.is_symlink():
+                    _copy_file(
+                        path,
+                        target / path.relative_to(source),
+                        force=force,
+                    )
 
 
-def _write_builtin_kit(target: Path) -> None:
-    (target / "AGENT.md").write_text(
-        BUILTIN_AGENT_MD,
-        encoding="utf-8",
-    )
+def _write_builtin_kit(target: Path, *, force: bool = False) -> None:
+    agent_md = target / "AGENT.md"
+    if force or not agent_md.exists():
+        agent_md.write_text(BUILTIN_AGENT_MD, encoding="utf-8")
     for name in CORE_SKILLS:
         path = target / "skills" / name / "SKILL.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(render_core_skill(name), encoding="utf-8")
+        if force or not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(render_core_skill(name), encoding="utf-8")
 
 
 def _append_once(path: Path, block: str, marker: str) -> None:
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    if marker not in existing:
+    end_marker = "# END AGENTKIT"
+    if marker in existing and marker == "# BEGIN AGENTKIT" and end_marker in existing:
+        start = existing.index(marker)
+        end = existing.index(end_marker, start) + len(end_marker)
+        replacement = block.strip()
+        updated = existing[:start] + replacement + existing[end:]
+        path.write_text(updated, encoding="utf-8")
+    elif marker not in existing:
         path.write_text(existing.rstrip() + block, encoding="utf-8")
 
 
@@ -162,10 +206,10 @@ def initialize_project(
     agent_dir.mkdir(parents=True, exist_ok=True)
     source = _source_kit_root()
     if source:
-        _copy_full_kit(source, agent_dir)
+        _copy_full_kit(source, agent_dir, force=force)
         resource_mode = "full-source-kit"
     else:
-        _write_builtin_kit(agent_dir)
+        _write_builtin_kit(agent_dir, force=force)
         resource_mode = "embedded-core-kit"
 
     config_path = write_default_config(project_root, force=force)

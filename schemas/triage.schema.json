@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/schemas/triage.schema.json",
+  "x-agentkit-schema-version": 1,
   "title": "Task triage result",
   "type": "object",
   "additionalProperties": false,
