@@ -39,10 +39,11 @@ The first managed graph refresh also creates or updates a bounded block in `.gra
 .agent/
 .agents/
 graphify-out/
+graph.json
 # END AGENTKIT
 ```
 
-User-authored ignore rules outside that block are preserved. When the block is first installed or changed, AgentKit performs one full local rebuild instead of an incremental update so stale `.agent` schema and skill nodes do not survive in `graph.json`. Later refreshes return to `--update`.
+User-authored ignore rules outside that block are preserved. When the block is first installed or changed, AgentKit performs one full local rebuild instead of an incremental update so stale `.agent` schema, skill, or previously published graph nodes do not survive. Later refreshes return to `--update`.
 
 For an existing noisy graph, upgrade AgentKit and run:
 
@@ -60,6 +61,28 @@ graphify query "lesson.json _synchronize_lesson_files atomic_write_text" --conte
 ```
 
 Increasing the token budget does not improve wrong seed selection; narrow the query or inspect an exact node instead.
+
+## Root graph.json is missing or stale
+
+AgentKit 1.0.4+ keeps Graphify's canonical output under `graphify-out/graph.json` and atomically mirrors the last successful snapshot to `graph.json` in the repository root. Run:
+
+```bash
+agentkit graph update
+agentkit doctor
+```
+
+A successful update prints `[agentkit] published graph.json`. The `graphify` section in `doctor` reports `output_graph_exists`, `root_graph_exists`, and both paths.
+
+If Graphify fails, AgentKit preserves the previous root `graph.json` instead of replacing it with partial or missing data. If Graphify exits successfully but does not produce a non-empty `graphify-out/graph.json`, the managed update is marked failed and the existing root snapshot is retained.
+
+The root file is intentionally not added to `.gitignore`. A local coding agent can read it immediately. For ChatGPT or another remote agent that only sees committed repository content, review the generated diff and commit `graph.json` explicitly:
+
+```bash
+git add graph.json .graphifyignore
+git commit -m "chore: refresh repository graph"
+```
+
+`graph.json` is generated evidence, not executable truth. Agents must use it for navigation and verify material conclusions against source files and tests. Large repositories may produce a sizeable file, so refresh and commit it deliberately rather than on every unrelated change.
 
 ## Incomplete run
 
