@@ -6,7 +6,11 @@ from pathlib import Path
 from .config import load_config
 from .executables import resolve_executable, resolve_graphify_executable
 from .git import is_git_repository
-from .graphify import find_graphify_project_skill
+from .graphify import (
+    find_graphify_project_skill,
+    graphify_output_graph_path,
+    root_graph_path,
+)
 
 
 def _version(command: list[str]) -> str:
@@ -30,6 +34,8 @@ def doctor(project_root: Path) -> dict[str, object]:
 
     graphify = resolve_graphify_executable()
     project_skill = find_graphify_project_skill(project_root)
+    output_graph = graphify_output_graph_path(project_root)
+    root_graph = root_graph_path(project_root)
     agent_binary = config.agent.command[0] if config and config.agent.command else ""
     agent = resolve_executable(agent_binary) if agent_binary else None
     graphify_command = [str(graphify.path), "--version"] if graphify.path else []
@@ -50,6 +56,10 @@ def doctor(project_root: Path) -> dict[str, object]:
             "executable": str(graphify.path) if graphify.path else "",
             "project_skill_installed": project_skill is not None,
             "project_skill_path": str(project_skill) if project_skill else "",
+            "output_graph": str(output_graph),
+            "output_graph_exists": output_graph.is_file(),
+            "root_graph": str(root_graph),
+            "root_graph_exists": root_graph.is_file(),
             "repair_command": "agentkit graph install --platform agents",
         },
         "agent": {
