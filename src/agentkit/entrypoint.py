@@ -6,11 +6,11 @@ import sys
 from . import cli as core_cli
 from .config import configured_project_root
 from .quality.cli import main as quality_main
+from .quality.hotspot_cli import main as hotspot_context_main
 from .quality.integration import QualityAwareRunner
 from .quality.resources import ensure_quality_project_files
-from .quality.resources_gate import (
-    ensure_quality_gate_project_files,
-)
+from .quality.resources_gate import ensure_quality_gate_project_files
+from .quality.resources_hotspot import ensure_hotspot_context_files
 
 
 def _command_position(argv: list[str]) -> int:
@@ -27,82 +27,43 @@ def _command_position(argv: list[str]) -> int:
     return index
 
 
-def _project_root_arg(
-    argv: list[str],
-) -> str | None:
+def _project_root_arg(argv: list[str]) -> str | None:
     for index, value in enumerate(argv):
-        if (
-            value == "--project-root"
-            and index + 1 < len(argv)
-        ):
+        if value == "--project-root" and index + 1 < len(argv):
             return argv[index + 1]
         if value.startswith("--project-root="):
             return value.split("=", 1)[1]
     return None
 
 
-def _quality_argv(
-    argv: list[str],
-    command_index: int,
-) -> list[str]:
+def _subcommand_argv(argv: list[str], command_index: int) -> list[str]:
     result: list[str] = []
     project_root = _project_root_arg(argv)
     if project_root:
-        result.extend(
-            ["--project-root", project_root]
-        )
-    result.extend(
-        argv[command_index + 1 :]
-    )
+        result.extend(["--project-root", project_root])
+    result.extend(argv[command_index + 1 :])
     return result
 
 
-def main(
-    argv: list[str] | None = None,
-) -> int:
-    args = list(
-        sys.argv[1:]
-        if argv is None
-        else argv
-    )
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
     position = _command_position(args)
-    command = (
-        args[position]
-        if position < len(args)
-        else ""
-    )
+    command = args[position] if position < len(args) else ""
     try:
         if command == "quality":
-            return quality_main(
-                _quality_argv(
-                    args,
-                    position,
-                )
-            )
-        core_cli.AgentKitRunner = (
-            QualityAwareRunner
-        )
+            return quality_main(_subcommand_argv(args, position))
+        if command == "hotspot-context":
+            return hotspot_context_main(_subcommand_argv(args, position))
+        core_cli.AgentKitRunner = QualityAwareRunner
         result = core_cli.main(args)
         if command == "init" and result == 0:
-            root = configured_project_root(
-                _project_root_arg(args)
-            )
+            root = configured_project_root(_project_root_arg(args))
             ensure_quality_project_files(root)
             ensure_quality_gate_project_files(root)
+            ensure_hotspot_context_files(root)
         return result
-    except (
-        FileNotFoundError,
-        ValueError,
-        RuntimeError,
-    ) as exc:
-        print(
-            json.dumps(
-                {"error": str(exc)},
-                ensure_ascii=False,
-                indent=2,
-            ),
-            file=sys.stderr,
-        )
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
         return 2
 
 
