@@ -34,20 +34,22 @@ You are a software-engineering agent. Deliver the smallest evidence-backed chang
 
 ## Graphify discipline
 
-When `graphify-out/graph.json` exists, use Graphify as a query-first navigation index for architecture, callers, dependencies, paths, and related tests.
+When root `graph.json` exists, treat it as the portable snapshot of the latest successful managed Graphify refresh. When the local CLI is available, prefer `agentkit graph query` or a narrow Graphify query over loading the full JSON document.
 
 - Prefer one narrow `graphify query` with a token budget over reading the full report or graph.
+- Parse root `graph.json` selectively when CLI traversal is unavailable; do not load the entire file unless the task genuinely requires it.
 - Treat `EXTRACTED` relationships as strong navigation evidence, not runtime proof.
 - Confirm `INFERRED` and ambiguous relationships in source code before editing.
 - Confirm dynamic imports, dependency injection, callbacks, Qt signals, ORM behavior, configuration-dependent behavior, and concurrency through source and tests.
 - Update the graph before standard or deep work when source files changed.
+- Never treat generated graph data as a substitute for source-level verification.
 
 ## Context discipline
 
 Read in this order:
 
 1. task request and repository metadata;
-2. scoped Graphify result when applicable;
+2. scoped Graphify result or selective root `graph.json` evidence when applicable;
 3. relevant subtree;
 4. symbol names and signatures;
 5. entry point and direct dependencies;
