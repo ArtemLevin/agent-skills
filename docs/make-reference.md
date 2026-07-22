@@ -2,6 +2,15 @@
 
 GNU Make is optional. `.agent/Makefile.agent` exposes the same operations as the CLI and is included through a bounded managed block in the project Makefile.
 
+Graphify bootstrap and update targets:
+
+```bash
+make ai-graph-install GRAPHIFY_PLATFORM=agents
+make ai-graph
+```
+
+`ai-graph-install` is idempotent and delegates to `agentkit graph install --platform ...`. AgentKit resolves the dependency executable from `PATH` or its own tool environment.
+
 Release targets:
 
 ```bash
