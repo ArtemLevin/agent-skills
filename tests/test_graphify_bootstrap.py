@@ -183,11 +183,11 @@ class GraphifyBootstrapTests(unittest.TestCase):
                     policy,
                     resolution=self._resolution(executable),
                 ).update()
-        command = run.call_args.args[0]
-        self.assertNotIn("--update", command)
-        ignore = (root / ".graphifyignore").read_text(encoding="utf-8")
-        self.assertIn(".agent/", ignore)
-        self.assertIn(".agents/", ignore)
+            command = run.call_args.args[0]
+            self.assertNotIn("--update", command)
+            ignore = (root / ".graphifyignore").read_text(encoding="utf-8")
+            self.assertIn(".agent/", ignore)
+            self.assertIn(".agents/", ignore)
 
     def test_graphify_ignore_preserves_user_rules(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
