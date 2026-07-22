@@ -23,6 +23,7 @@ class Stage(StrEnum):
     COMPLETE = "complete"
     FAILED = "failed"
     APPROVAL_REQUIRED = "approval_required"
+    BUDGET_EXCEEDED = "budget_exceeded"
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,39 @@ class TriageResult:
 
 
 @dataclass(frozen=True)
+class TokenUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    reasoning_tokens: int = 0
+    total_tokens: int = 0
+    measured: bool = False
+    source: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TokenUsage":
+        def value(name: str) -> int:
+            raw = data.get(name, 0)
+            return int(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else 0
+
+        input_tokens = value("input_tokens")
+        output_tokens = value("output_tokens")
+        total_tokens = value("total_tokens") or input_tokens + output_tokens
+        return cls(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached_input_tokens=value("cached_input_tokens"),
+            reasoning_tokens=value("reasoning_tokens"),
+            total_tokens=total_tokens,
+            measured=bool(data.get("measured", False)),
+            source=str(data.get("source", "")),
+        )
+
+
+@dataclass(frozen=True)
 class CommandResult:
     command: list[str]
     returncode: int
@@ -45,13 +79,17 @@ class CommandResult:
     stderr: str
     duration_seconds: float
     timed_out: bool = False
+    usage: TokenUsage | None = None
 
     @property
     def passed(self) -> bool:
         return self.returncode == 0 and not self.timed_out
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self) | {"passed": self.passed}
+        data = asdict(self)
+        data["passed"] = self.passed
+        data["usage"] = self.usage.to_dict() if self.usage is not None else None
+        return data
 
 
 @dataclass(frozen=True)
@@ -95,6 +133,7 @@ class CompletionReport:
     review_passed: bool
     blocking_findings: int
     scope_passed: bool
+    budget_passed: bool = True
     residual_risks: list[str] = field(default_factory=list)
 
     @property
@@ -105,6 +144,7 @@ class CompletionReport:
             and self.review_passed
             and self.blocking_findings == 0
             and self.scope_passed
+            and self.budget_passed
         )
 
     def to_dict(self) -> dict[str, Any]:

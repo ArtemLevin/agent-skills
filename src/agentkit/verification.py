@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from .commands import CommandPolicy, run_command
 from .config import VerificationConfig
 from .models import CommandResult
+
+
+CommandObserver = Callable[[str, CommandResult], None]
 
 
 def discover_commands(project_root: Path) -> list[list[str]]:
@@ -32,14 +36,19 @@ def run_checks(
     project_root: Path,
     config: VerificationConfig,
     policy: CommandPolicy,
+    *,
+    observer: CommandObserver | None = None,
 ) -> list[CommandResult]:
     commands = config.commands or discover_commands(project_root)
-    return [
-        run_command(
+    results: list[CommandResult] = []
+    for command in commands:
+        result = run_command(
             command,
             cwd=project_root,
             timeout_seconds=config.timeout_seconds,
             policy=policy,
         )
-        for command in commands
-    ]
+        results.append(result)
+        if observer is not None:
+            observer("verification", result)
+    return results

@@ -31,6 +31,25 @@ require_review = true
 deep_requires_approval = true
 max_fix_iterations = 1
 
+[budget]
+enabled = true
+soft_input_tokens = 30000
+hard_input_tokens = 60000
+soft_output_tokens = 8000
+hard_output_tokens = 16000
+soft_agent_calls = 4
+hard_agent_calls = 7
+soft_duration_seconds = 1800
+hard_duration_seconds = 3600
+# allow = record partial totals; warn = record a soft warning; stop = block the next model call
+unknown_usage_policy = "warn"
+
+[budget.phase_agent_call_limits]
+plan = 1
+implementation = 1
+review = 2
+targeted_fix = 1
+
 [verification]
 # Each command is an argv array. Empty means AgentKit performs conservative auto-discovery.
 commands = []
@@ -78,6 +97,28 @@ class WorkflowConfig:
 
 
 @dataclass(frozen=True)
+class BudgetConfig:
+    enabled: bool = True
+    soft_input_tokens: int = 30000
+    hard_input_tokens: int = 60000
+    soft_output_tokens: int = 8000
+    hard_output_tokens: int = 16000
+    soft_agent_calls: int = 4
+    hard_agent_calls: int = 7
+    soft_duration_seconds: int = 1800
+    hard_duration_seconds: int = 3600
+    unknown_usage_policy: str = "warn"
+    phase_agent_call_limits: dict[str, int] = field(
+        default_factory=lambda: {
+            "plan": 1,
+            "implementation": 1,
+            "review": 2,
+            "targeted_fix": 1,
+        }
+    )
+
+
+@dataclass(frozen=True)
 class VerificationConfig:
     commands: list[list[str]] = field(default_factory=list)
     timeout_seconds: int = 900
@@ -99,6 +140,7 @@ class AgentKitConfig:
     agent: AgentConfig
     graphify: GraphifyConfig
     workflow: WorkflowConfig
+    budget: BudgetConfig
     verification: VerificationConfig
     scope: ScopeConfig
     security: SecurityConfig
@@ -130,6 +172,21 @@ def _command_list(value: Any) -> list[list[str]]:
     return commands
 
 
+def _positive_int_map(value: Any, *, field_name: str) -> dict[str, int]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be a table")
+    result: dict[str, int] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key).replace("-", "_")
+        parsed = int(raw_value)
+        if parsed < 0:
+            raise ValueError(f"{field_name}.{key} must be zero or positive")
+        result[key] = parsed
+    return result
+
+
 def load_config(project_root: Path) -> AgentKitConfig:
     config_path = project_root / ".agent" / "agentkit.toml"
     if not config_path.is_file():
@@ -140,9 +197,14 @@ def load_config(project_root: Path) -> AgentKitConfig:
     agent = _section(data, "agent")
     graphify = _section(data, "graphify")
     workflow = _section(data, "workflow")
+    budget = _section(data, "budget")
     verification = _section(data, "verification")
     scope = _section(data, "scope")
     security = _section(data, "security")
+
+    unknown_usage_policy = str(budget.get("unknown_usage_policy", "warn")).lower()
+    if unknown_usage_policy not in {"allow", "warn", "stop"}:
+        raise ValueError("budget.unknown_usage_policy must be allow, warn, or stop")
 
     return AgentKitConfig(
         agent=AgentConfig(
@@ -167,6 +229,25 @@ def load_config(project_root: Path) -> AgentKitConfig:
             require_review=bool(workflow.get("require_review", True)),
             deep_requires_approval=bool(workflow.get("deep_requires_approval", True)),
             max_fix_iterations=int(workflow.get("max_fix_iterations", 1)),
+        ),
+        budget=BudgetConfig(
+            enabled=bool(budget.get("enabled", True)),
+            soft_input_tokens=int(budget.get("soft_input_tokens", 30000)),
+            hard_input_tokens=int(budget.get("hard_input_tokens", 60000)),
+            soft_output_tokens=int(budget.get("soft_output_tokens", 8000)),
+            hard_output_tokens=int(budget.get("hard_output_tokens", 16000)),
+            soft_agent_calls=int(budget.get("soft_agent_calls", 4)),
+            hard_agent_calls=int(budget.get("hard_agent_calls", 7)),
+            soft_duration_seconds=int(budget.get("soft_duration_seconds", 1800)),
+            hard_duration_seconds=int(budget.get("hard_duration_seconds", 3600)),
+            unknown_usage_policy=unknown_usage_policy,
+            phase_agent_call_limits=_positive_int_map(
+                budget.get(
+                    "phase_agent_call_limits",
+                    {"plan": 1, "implementation": 1, "review": 2, "targeted_fix": 1},
+                ),
+                field_name="budget.phase_agent_call_limits",
+            ),
         ),
         verification=VerificationConfig(
             commands=_command_list(verification.get("commands", [])),

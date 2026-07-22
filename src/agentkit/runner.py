@@ -9,10 +9,11 @@ from .commands import CommandPolicy
 from .config import AgentKitConfig, load_config
 from .git import changed_files, current_head, diff_text, is_git_repository
 from .graphify import GraphContext, GraphifyClient
-from .models import CompletionReport, ReviewReport, RunMode, Stage
+from .models import CommandResult, CompletionReport, ReviewReport, RunMode, Stage
 from .prompts import fix_prompt, implementation_prompt, review_prompt
 from .review import parse_review
 from .state import RunState
+from .telemetry import BudgetController, BudgetStatus, UsageLedger
 from .triage import classify_task
 from .verification import run_checks
 
@@ -57,10 +58,13 @@ class AgentKitRunner:
         )
         self._adapter_override = adapter
 
+    def _provider_for(self, platform_override: str | None) -> str:
+        return (platform_override or self.config.agent.platform).lower()
+
     def _adapter_for(self, platform_override: str | None) -> AgentAdapter:
         if self._adapter_override is not None:
             return self._adapter_override
-        platform = (platform_override or self.config.agent.platform).lower()
+        platform = self._provider_for(platform_override)
         presets = {
             "codex": ["codex", "exec", "{prompt}"],
             "claude": ["claude", "-p", "{prompt}"],
@@ -79,6 +83,7 @@ class AgentKitRunner:
             command_template,
             timeout_seconds=self.config.agent.timeout_seconds,
             policy=self.policy,
+            provider=platform,
         )
 
     def _task_packet(
@@ -98,8 +103,88 @@ class AgentKitRunner:
             "limits": {
                 "max_changed_files": self.config.scope.max_changed_files,
                 "max_fix_iterations": self.config.workflow.max_fix_iterations,
+                "hard_input_tokens": self.config.budget.hard_input_tokens,
+                "hard_output_tokens": self.config.budget.hard_output_tokens,
+                "hard_agent_calls": self.config.budget.hard_agent_calls,
+                "hard_duration_seconds": self.config.budget.hard_duration_seconds,
             },
         }
+
+    def _persist_telemetry(
+        self,
+        state: RunState,
+        ledger: UsageLedger,
+        controller: BudgetController,
+    ) -> BudgetStatus:
+        ledger.save(state.directory / "usage.json")
+        status = controller.evaluate(ledger)
+        state.write_json("budget.json", status.to_dict())
+        return status
+
+    def _tool_observer(
+        self,
+        state: RunState,
+        ledger: UsageLedger,
+        controller: BudgetController,
+    ):
+        def observe(phase: str, result: CommandResult) -> None:
+            ledger.record(phase=phase, kind="tool", result=result, provider="local")
+            self._persist_telemetry(state, ledger, controller)
+
+        return observe
+
+    def _execute_agent(
+        self,
+        *,
+        adapter: AgentAdapter,
+        prompt: str,
+        phase: str,
+        state: RunState,
+        ledger: UsageLedger,
+        controller: BudgetController,
+        provider: str,
+    ) -> tuple[CommandResult | None, BudgetStatus, str]:
+        allowed, reason = controller.can_start_agent_call(ledger, phase)
+        if not allowed:
+            status = self._persist_telemetry(state, ledger, controller)
+            return None, status, reason
+        result = adapter.execute(prompt, phase=phase, cwd=self.project_root)
+        ledger.record(phase=phase, kind="agent", result=result, provider=provider)
+        status = self._persist_telemetry(state, ledger, controller)
+        reason = "; ".join(status.hard_limits_exceeded)
+        return result, status, reason
+
+    def _budget_outcome(
+        self,
+        *,
+        state: RunState,
+        mode: RunMode,
+        baseline_files: list[str],
+        reason: str,
+        status: BudgetStatus,
+    ) -> RunOutcome:
+        task_files = sorted(set(changed_files(self.project_root)) - set(baseline_files))
+        completion = CompletionReport(
+            status="budget_exceeded",
+            mode=mode,
+            changed_files=task_files,
+            checks_passed=False,
+            review_passed=False,
+            blocking_findings=0,
+            scope_passed=len(task_files) <= self.config.scope.max_changed_files,
+            budget_passed=False,
+            residual_risks=[reason or "Configured hard budget was exceeded"],
+        )
+        payload = completion.to_dict()
+        payload["budget"] = status.to_dict()
+        state.write_json("completion.json", payload)
+        return RunOutcome(
+            5,
+            Stage.BUDGET_EXCEEDED,
+            state.run_id,
+            completion,
+            reason or "Configured hard budget was exceeded",
+        )
 
     def run(self, request: RunRequest) -> RunOutcome:
         if not request.task.strip():
@@ -115,6 +200,12 @@ class AgentKitRunner:
             )
 
         state = RunState(self.project_root)
+        provider = self._provider_for(request.agent_override)
+        ledger = UsageLedger(run_id=state.run_id, provider=provider)
+        controller = BudgetController(self.config.budget)
+        self._persist_telemetry(state, ledger, controller)
+        observer = self._tool_observer(state, ledger, controller)
+
         adapter = self._adapter_for(request.agent_override)
         baseline_head = current_head(self.project_root)
         triage = classify_task(request.task, request.mode)
@@ -126,6 +217,7 @@ class AgentKitRunner:
                 self.project_root,
                 self.config.graphify,
                 self.policy,
+                observer=observer,
             ).build_context(request.task)
         state.write_json("graph.json", graph.to_dict())
 
@@ -160,7 +252,24 @@ class AgentKitRunner:
         if request.dry_run:
             return RunOutcome(0, Stage.TRIAGE, state.run_id, None, "Dry run created task packet and prompt")
 
-        implementation = adapter.execute(prompt, phase="implementation", cwd=self.project_root)
+        initial_phase = "plan" if request.plan_only else "implementation"
+        implementation, budget_status, budget_reason = self._execute_agent(
+            adapter=adapter,
+            prompt=prompt,
+            phase=initial_phase,
+            state=state,
+            ledger=ledger,
+            controller=controller,
+            provider=provider,
+        )
+        if implementation is None or budget_status.hard_limits_exceeded:
+            return self._budget_outcome(
+                state=state,
+                mode=triage.mode,
+                baseline_files=baseline_files,
+                reason=budget_reason,
+                status=budget_status,
+            )
         state.write_json("implementation-command.json", implementation.to_dict())
         state.write_text("implementation.stdout.txt", implementation.stdout)
         state.write_text("implementation.stderr.txt", implementation.stderr)
@@ -175,45 +284,96 @@ class AgentKitRunner:
         if request.plan_only:
             return RunOutcome(0, Stage.COMPLETE, state.run_id, None, "Plan completed; no implementation requested")
 
-        checks = run_checks(self.project_root, self.config.verification, self.policy)
+        checks = run_checks(
+            self.project_root,
+            self.config.verification,
+            self.policy,
+            observer=observer,
+        )
         state.write_json("verification.json", [item.to_dict() for item in checks])
         checks_passed = bool(checks) and all(item.passed for item in checks)
 
         review = ReviewReport(verdict="skipped")
         review_passed = not self.config.workflow.require_review
         if self.config.workflow.require_review:
-            review = self._run_review(request.task, triage, state, adapter=adapter)
+            review, budget_status, budget_reason = self._run_review(
+                request.task,
+                triage,
+                state,
+                adapter=adapter,
+                ledger=ledger,
+                controller=controller,
+                provider=provider,
+            )
+            if review is None or budget_status.hard_limits_exceeded:
+                return self._budget_outcome(
+                    state=state,
+                    mode=triage.mode,
+                    baseline_files=baseline_files,
+                    reason=budget_reason,
+                    status=budget_status,
+                )
             review_passed = review.verdict == "approved" and not review.blocking_findings
 
         fixes_used = 0
         while review.blocking_findings and fixes_used < self.config.workflow.max_fix_iterations:
             fixes_used += 1
-            correction = adapter.execute(
-                fix_prompt(task=request.task, review=review),
-                phase="targeted-fix",
-                cwd=self.project_root,
+            correction, budget_status, budget_reason = self._execute_agent(
+                adapter=adapter,
+                prompt=fix_prompt(task=request.task, review=review),
+                phase="targeted_fix",
+                state=state,
+                ledger=ledger,
+                controller=controller,
+                provider=provider,
             )
+            if correction is None or budget_status.hard_limits_exceeded:
+                return self._budget_outcome(
+                    state=state,
+                    mode=triage.mode,
+                    baseline_files=baseline_files,
+                    reason=budget_reason,
+                    status=budget_status,
+                )
             state.write_json(f"fix-{fixes_used}-command.json", correction.to_dict())
             if not correction.passed:
                 break
-            checks = run_checks(self.project_root, self.config.verification, self.policy)
+            checks = run_checks(
+                self.project_root,
+                self.config.verification,
+                self.policy,
+                observer=observer,
+            )
             state.write_json(
                 f"verification-after-fix-{fixes_used}.json",
                 [item.to_dict() for item in checks],
             )
             checks_passed = bool(checks) and all(item.passed for item in checks)
-            review = self._run_review(
+            review, budget_status, budget_reason = self._run_review(
                 request.task,
                 triage,
                 state,
                 adapter=adapter,
+                ledger=ledger,
+                controller=controller,
+                provider=provider,
                 suffix=f"-after-fix-{fixes_used}",
             )
+            if review is None or budget_status.hard_limits_exceeded:
+                return self._budget_outcome(
+                    state=state,
+                    mode=triage.mode,
+                    baseline_files=baseline_files,
+                    reason=budget_reason,
+                    status=budget_status,
+                )
             review_passed = review.verdict == "approved" and not review.blocking_findings
 
         final_files = changed_files(self.project_root)
         task_files = sorted(set(final_files) - set(baseline_files))
         scope_passed = len(task_files) <= self.config.scope.max_changed_files
+        final_budget = self._persist_telemetry(state, ledger, controller)
+        budget_passed = final_budget.allowed
         residual_risks: list[str] = []
         if not graph.available:
             residual_risks.append(graph.warning or "Graphify context was unavailable")
@@ -225,8 +385,10 @@ class AgentKitRunner:
             residual_risks.append("Adversarial review did not produce an approved blocking-free result")
         if not scope_passed:
             residual_risks.append("Changed-file count exceeded configured scope limit")
+        residual_risks.extend(final_budget.soft_limits_reached)
+        residual_risks.extend(final_budget.hard_limits_exceeded)
 
-        ready = checks_passed and review_passed and scope_passed
+        ready = checks_passed and review_passed and scope_passed and budget_passed
         completion = CompletionReport(
             status="ready_for_review" if ready else "needs_attention",
             mode=triage.mode,
@@ -235,6 +397,7 @@ class AgentKitRunner:
             review_passed=review_passed,
             blocking_findings=len(review.blocking_findings),
             scope_passed=scope_passed,
+            budget_passed=budget_passed,
             residual_risks=residual_risks,
         )
         state.write_json("completion.json", completion.to_dict())
@@ -253,15 +416,24 @@ class AgentKitRunner:
         state: RunState,
         *,
         adapter: AgentAdapter,
+        ledger: UsageLedger,
+        controller: BudgetController,
+        provider: str,
         suffix: str = "",
-    ) -> ReviewReport:
+    ) -> tuple[ReviewReport | None, BudgetStatus, str]:
         before = changed_files(self.project_root)
         before_diff_hash = hashlib.sha256(diff_text(self.project_root).encode("utf-8")).hexdigest()
-        result = adapter.execute(
-            review_prompt(task=task, diff=diff_text(self.project_root), triage=triage),
+        result, budget_status, budget_reason = self._execute_agent(
+            adapter=adapter,
+            prompt=review_prompt(task=task, diff=diff_text(self.project_root), triage=triage),
             phase="review",
-            cwd=self.project_root,
+            state=state,
+            ledger=ledger,
+            controller=controller,
+            provider=provider,
         )
+        if result is None:
+            return None, budget_status, budget_reason
         state.write_json(f"review-command{suffix}.json", result.to_dict())
         state.write_text(f"review{suffix}.stdout.txt", result.stdout)
         state.write_text(f"review{suffix}.stderr.txt", result.stderr)
@@ -276,7 +448,7 @@ class AgentKitRunner:
             payload = report.to_dict()
             payload["runner_error"] = "Review phase modified the working tree"
             state.write_json(f"review{suffix}.json", payload)
-            return ReviewReport(
+            report = ReviewReport(
                 verdict="changes_required",
                 findings=parse_review(
                     '{"verdict":"changes_required","findings":[{"severity":"P1",'
@@ -286,6 +458,7 @@ class AgentKitRunner:
                 ).findings,
                 raw_output=result.stdout,
             )
+            return report, budget_status, budget_reason
         report = parse_review(result.stdout if result.passed else result.stdout + "\n" + result.stderr)
         state.write_json(f"review{suffix}.json", report.to_dict())
-        return report
+        return report, budget_status, budget_reason

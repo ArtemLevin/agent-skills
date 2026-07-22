@@ -11,6 +11,7 @@ from .doctor import doctor
 from .graphify import GraphifyClient
 from .init_project import initialize_project
 from .models import RunMode
+from .reporting import aggregate_report, load_budget_status, load_usage
 from .runner import AgentKitError, AgentKitRunner, RunRequest
 from .verification import run_checks
 
@@ -66,6 +67,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("check", help="Run configured or auto-discovered verification")
     sub.add_parser("doctor", help="Check local installation and project readiness")
     sub.add_parser("status", help="Show latest AgentKit run status")
+
+    usage = sub.add_parser("usage", help="Show per-phase telemetry for one run")
+    usage.add_argument("--run-id", default="latest")
+
+    budget = sub.add_parser("budget", help="Evaluate configured budgets for one run")
+    budget.add_argument("--run-id", default="latest")
+
+    report = sub.add_parser("report", help="Aggregate usage and readiness across recent runs")
+    report.add_argument("--limit", type=int, default=20)
     return parser
 
 
@@ -106,12 +116,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             _print({"run_id": run_id, "completion": payload})
             return 0
+        if args.command == "usage":
+            _print(load_usage(project_root, args.run_id))
+            return 0
+        if args.command == "report":
+            _print(aggregate_report(project_root, limit=args.limit))
+            return 0
 
         config = load_config(project_root)
         policy = CommandPolicy(
             config.security.allowed_executables,
             config.security.denied_substrings,
         )
+        if args.command == "budget":
+            payload = load_budget_status(project_root, config.budget, args.run_id)
+            _print(payload)
+            return 0 if payload["status"]["allowed"] else 5
         if args.command == "check":
             results = run_checks(project_root, config.verification, policy)
             _print([item.to_dict() for item in results])

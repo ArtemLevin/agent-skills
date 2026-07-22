@@ -20,6 +20,10 @@ class InitProjectTests(unittest.TestCase):
             self.assertTrue((root / ".agent" / "skills" / "task-triage" / "SKILL.md").is_file())
             self.assertIn("-include .agent/Makefile.agent", (root / "Makefile").read_text(encoding="utf-8"))
             self.assertIn("graphify-out/", (root / ".gitignore").read_text(encoding="utf-8"))
+            generated = (root / ".agent" / "Makefile.agent").read_text(encoding="utf-8")
+            self.assertIn("ai-usage:", generated)
+            self.assertIn("ai-budget:", generated)
+            self.assertIn("ai-report:", generated)
             self.assertIn(result["resource_mode"], {"embedded-core-kit", "full-source-kit"})
 
     def test_init_is_idempotent(self) -> None:
