@@ -11,8 +11,8 @@ from agentkit.init_project import MAKEFILE_AGENT
 class ReleaseContractTests(unittest.TestCase):
     def test_public_surface_is_versioned_and_stable(self) -> None:
         contracts = PublicContracts().to_dict()
-        self.assertEqual(__version__, "1.0.3")
-        self.assertEqual(contracts["package_version"], "1.0.3")
+        self.assertEqual(__version__, "1.0.4")
+        self.assertEqual(contracts["package_version"], "1.0.4")
         self.assertEqual(sorted(contracts["exit_codes"]), list(range(7)))
         for command in ("migrate", "self-test", "diagnostics", "version"):
             self.assertIn(command, CORE_COMMANDS)

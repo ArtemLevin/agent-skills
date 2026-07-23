@@ -6,7 +6,7 @@ BUILTIN_AGENT_MD = """# Engineering Agent Contract
 Deliver the smallest evidence-backed change that fully satisfies the task.
 
 1. Run task triage before substantial repository work.
-2. Query Graphify first when a graph exists and the task spans code relationships.
+2. Use root `graph.json` as portable navigation evidence when present; prefer a scoped Graphify query when the CLI is available.
 3. Compile phase-specific context and read only selected skills and minimal source context.
 4. Establish verifiable acceptance criteria.
 5. Keep the diff focused and preserve unrelated changes.
@@ -14,7 +14,7 @@ Deliver the smallest evidence-backed change that fully satisfies the task.
 7. Perform adversarial review and fix only blocking findings.
 8. Stop when required checks pass and no P0/P1 finding remains.
 
-Never claim an unexecuted check passed. Never commit, push, deploy, or perform irreversible operations unless the user explicitly authorizes that action.
+Treat graph data as navigation evidence and verify material conclusions against source files and tests. Never claim an unexecuted check passed. Never commit, push, deploy, or perform irreversible operations unless the user explicitly authorizes that action.
 """
 
 _CORE_SKILL_TEMPLATE = """---
@@ -61,8 +61,8 @@ CORE_SKILLS = {
         "Route the task to the smallest safe engineering workflow.",
     ),
     "repository-context": (
-        "Use to obtain minimal repository context, preferring scoped Graphify queries before broad file reads when a graph is available.",
-        "Find relevant symbols, dependencies, tests, and unknowns without reading the whole repository.",
+        "Use to obtain minimal repository context from root graph.json, scoped Graphify queries, and targeted source reads without loading the whole repository.",
+        "Find relevant symbols, dependencies, tests, and unknowns while distinguishing graph hints from source-verified facts.",
     ),
     "context-compiler": (
         "Use to compile phase-specific minimal context, build or inspect the project profile, and reuse valid cached context without rereading unchanged files.",

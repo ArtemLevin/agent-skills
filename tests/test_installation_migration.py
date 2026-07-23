@@ -31,7 +31,7 @@ class InstallationMigrationTests(unittest.TestCase):
             root = Path(directory)
             _init(root)
             manifest = installation_manifest(root)
-            self.assertEqual(manifest["agentkit_version"], "1.0.3")
+            self.assertEqual(manifest["agentkit_version"], "1.0.4")
             agent = root / ".agent/AGENT.md"
             agent.write_text("custom project contract\n", encoding="utf-8")
             _init(root)

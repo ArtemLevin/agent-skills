@@ -2,6 +2,14 @@
 
 All notable AgentKit changes are documented here. The project follows semantic versioning from 1.0 onward.
 
+## 1.0.4 — 2026-07-22
+
+- Atomically publish Graphify's canonical `graphify-out/graph.json` as `graph.json` in the repository root after every successful managed graph refresh.
+- Preserve the previous root snapshot when Graphify or publication fails, and remove temporary publication files after success or failure.
+- Exclude the published root `graph.json` from Graphify extraction to prevent the graph from indexing itself.
+- Extend `agentkit doctor` with source-graph and root-snapshot paths and availability flags.
+- Teach repository-context guidance to treat root `graph.json` as portable navigation evidence and to verify graph conclusions against source code.
+
 ## 1.0.3 — 2026-07-22
 
 - Send the original engineering task to `graphify query` without a generic English instruction prefix that polluted lexical seed selection.
